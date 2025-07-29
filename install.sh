@@ -3,7 +3,7 @@
 # Intelligent Dotfiles Installation Script
 # This script detects the OS and installs required packages
 
-set -e
+# Note: We don't use 'set -e' to ensure the script continues even if some components fail
 
 # Colors for output
 RED='\033[0;31m'
@@ -183,7 +183,12 @@ install_rust() {
         print_status "Rust/Cargo is already installed"
     else
         print_info "Installing Rust and Cargo..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        # Install in non-interactive mode and source the env file
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --no-modify-path
+        # Source cargo environment for current session
+        if [ -f "$HOME/.cargo/env" ]; then
+            source "$HOME/.cargo/env"
+        fi
     fi
 }
 
@@ -240,17 +245,17 @@ main() {
         echo
     fi
     
-    # Install components
-    install_basic_packages
-    install_oh_my_zsh
-    install_powerlevel10k
-    install_zsh_plugins
-    install_nvm
-    install_oh_my_bash
-    install_oh_my_tmux
-    install_rust
+    # Install components (continue even if some fail)
+    install_basic_packages || print_warning "Some basic packages failed to install"
+    install_oh_my_zsh || print_warning "Oh My Zsh installation had issues"
+    install_powerlevel10k || print_warning "Powerlevel10k installation had issues"
+    install_zsh_plugins || print_warning "Some zsh plugins failed to install"
+    install_nvm || print_warning "NVM installation had issues"
+    install_oh_my_bash || print_warning "Oh My Bash installation had issues"
+    install_oh_my_tmux || print_warning "Oh My Tmux installation had issues"
+    install_rust || print_warning "Rust installation had issues"
     
-    # Create symlinks
+    # Create symlinks - this should always run
     create_symlinks
     
     echo
