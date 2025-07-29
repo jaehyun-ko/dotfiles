@@ -118,8 +118,11 @@ source ~/powerlevel10k/powerlevel10k.zsh-theme
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
 
-. "$HOME/.local/bin/env"
-export GOOGLE_CLOUD_PROJECT=vt-progress-sheet-331903
+# Load local environment if it exists
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
+
+# Google Cloud Project (customize as needed)
+# export GOOGLE_CLOUD_PROJECT=your-project-id
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm

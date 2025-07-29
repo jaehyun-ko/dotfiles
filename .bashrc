@@ -160,9 +160,11 @@ source "$OSH"/oh-my-bash.sh
 # alias bashconfig="mate ~/.bashrc"
 # alias ohmybash="mate ~/.oh-my-bash"
 
-. "$HOME/.cargo/env"
+# Load cargo environment if it exists
+[ -f "$HOME/.cargo/env" ] && . "$HOME/.cargo/env"
 
-. "$HOME/.local/bin/env"
+# Load local environment if it exists
+[ -f "$HOME/.local/bin/env" ] && . "$HOME/.local/bin/env"
 
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"  # This loads nvm
