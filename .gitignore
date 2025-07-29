@@ -1,0 +1,23 @@
+# Backup files
+*.backup
+*~
+*.swp
+*.swo
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Personal data
+.git-credentials
+.netrc
+.ssh/
+.gnupg/
