@@ -265,7 +265,10 @@ main() {
     
     # Change default shell to zsh if not already
     if [ "$SHELL" != "$(which zsh)" ]; then
-        print_info "To change your default shell to zsh, run: chsh -s $(which zsh)"
+        print_info "Changing default shell to zsh..."
+        chsh -s "$(which zsh)" || print_warning "Failed to change default shell. You may need to run: chsh -s $(which zsh)"
+    else
+        print_status "Default shell is already zsh"
     fi
 }
 
