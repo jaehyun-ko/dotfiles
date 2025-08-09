@@ -211,7 +211,6 @@ create_symlinks() {
     local dotfiles=(
         ".zshrc"
         ".bashrc"
-        ".gitconfig"
         ".tmux.conf.local"
         ".p10k.zsh"
     )
@@ -273,8 +272,69 @@ main() {
     
     # Change default shell to zsh if not already
     if [ "$SHELL" != "$(which zsh)" ]; then
-        print_info "Changing default shell to zsh..."
-        chsh -s "$(which zsh)" || print_warning "Failed to change default shell. You may need to run: chsh -s $(which zsh)"
+        print_info "Attempting to change default shell to zsh..."
+        
+        # Get current username
+        CURRENT_USER=$(whoami)
+        ZSH_PATH=$(which zsh)
+        
+        # Method 1: Try chsh with sudo (non-interactive)
+        if command_exists sudo; then
+            # Check if zsh is in /etc/shells
+            if ! grep -q "^${ZSH_PATH}$" /etc/shells 2>/dev/null; then
+                print_info "Adding zsh to /etc/shells..."
+                echo "$ZSH_PATH" | sudo tee -a /etc/shells > /dev/null || print_warning "Failed to add zsh to /etc/shells"
+            fi
+            
+            # Try to change shell with sudo
+            sudo usermod -s "$ZSH_PATH" "$CURRENT_USER" 2>/dev/null && {
+                print_status "Successfully changed default shell to zsh using sudo"
+                print_info "Please log out and log back in for the change to take effect"
+            } || {
+                # Method 2: Try regular chsh
+                print_info "Trying regular chsh (you may need to enter your password)..."
+                chsh -s "$ZSH_PATH" && {
+                    print_status "Successfully changed default shell to zsh"
+                    print_info "Please log out and log back in for the change to take effect"
+                } || {
+                    print_warning "Could not automatically change default shell"
+                    print_info "Please manually run: chsh -s $ZSH_PATH"
+                    print_info "Or add 'exec zsh' to your .bashrc/.profile to auto-start zsh"
+                    
+                    # Method 3: Add exec zsh to .bashrc as fallback
+                    if ! grep -q "exec zsh" "$HOME/.bashrc" 2>/dev/null; then
+                        print_info "Adding 'exec zsh' to .bashrc as fallback..."
+                        echo "" >> "$HOME/.bashrc"
+                        echo "# Auto-start zsh if available" >> "$HOME/.bashrc"
+                        echo 'if [ -x "$(command -v zsh)" ] && [ "$SHELL" != "$(which zsh)" ]; then' >> "$HOME/.bashrc"
+                        echo '    exec zsh' >> "$HOME/.bashrc"
+                        echo 'fi' >> "$HOME/.bashrc"
+                        print_status "Added zsh auto-start to .bashrc"
+                    fi
+                }
+            }
+        else
+            # No sudo available, try regular chsh
+            print_info "Trying to change shell (you may need to enter your password)..."
+            chsh -s "$ZSH_PATH" && {
+                print_status "Successfully changed default shell to zsh"
+                print_info "Please log out and log back in for the change to take effect"
+            } || {
+                print_warning "Could not automatically change default shell"
+                print_info "Please manually run: chsh -s $ZSH_PATH"
+                
+                # Add exec zsh to .bashrc as fallback
+                if ! grep -q "exec zsh" "$HOME/.bashrc" 2>/dev/null; then
+                    print_info "Adding 'exec zsh' to .bashrc as fallback..."
+                    echo "" >> "$HOME/.bashrc"
+                    echo "# Auto-start zsh if available" >> "$HOME/.bashrc"
+                    echo 'if [ -x "$(command -v zsh)" ] && [ "$SHELL" != "$(which zsh)" ]; then' >> "$HOME/.bashrc"
+                    echo '    exec zsh' >> "$HOME/.bashrc"
+                    echo 'fi' >> "$HOME/.bashrc"
+                    print_status "Added zsh auto-start to .bashrc"
+                fi
+            }
+        fi
     else
         print_status "Default shell is already zsh"
     fi
