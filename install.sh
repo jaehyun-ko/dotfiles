@@ -153,6 +153,14 @@ install_nvm() {
         print_info "Installing NVM..."
         curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
     fi
+    
+    # Source NVM and install/use latest Node.js
+    export NVM_DIR="$HOME/.nvm"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+    
+    print_info "Installing latest Node.js via NVM..."
+    nvm install node || print_warning "Failed to install Node.js"
+    nvm use node || print_warning "Failed to set default Node.js version"
 }
 
 # Install Oh My Bash
