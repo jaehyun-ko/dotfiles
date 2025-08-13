@@ -200,6 +200,73 @@ install_rust() {
     fi
 }
 
+# Install uv (Python package manager)
+install_uv() {
+    if command_exists uv; then
+        print_status "uv is already installed"
+    else
+        print_info "Installing uv (Python package manager)..."
+        # Install uv using the official installer
+        curl -LsSf https://astral.sh/uv/install.sh | sh || {
+            print_warning "Failed to install uv using official installer"
+            # Try alternative installation method via pip
+            if command_exists pip3; then
+                print_info "Trying to install uv via pip..."
+                pip3 install --user uv || print_error "Failed to install uv via pip"
+            fi
+        }
+    fi
+}
+
+# Install nvtop (GPU monitoring tool)
+install_nvtop() {
+    if command_exists nvtop; then
+        print_status "nvtop is already installed"
+    else
+        print_info "Installing nvtop (GPU monitoring tool)..."
+        
+        if [[ "$OS" == "debian" ]]; then
+            # For Ubuntu/Debian systems
+            $PKG_INSTALL nvtop || {
+                print_warning "Failed to install nvtop from package manager"
+                print_info "Trying to build nvtop from source..."
+                # Install build dependencies
+                $PKG_INSTALL cmake libncurses5-dev libncursesw5-dev git build-essential || print_error "Failed to install build dependencies"
+                
+                # Clone and build nvtop
+                local BUILD_DIR="/tmp/nvtop_build_$$"
+                mkdir -p "$BUILD_DIR"
+                cd "$BUILD_DIR"
+                git clone https://github.com/Syllo/nvtop.git
+                mkdir -p nvtop/build && cd nvtop/build
+                cmake .. -DCMAKE_BUILD_TYPE=Release
+                make
+                sudo make install || print_error "Failed to install nvtop from source"
+                cd - > /dev/null
+                rm -rf "$BUILD_DIR"
+            }
+        elif [[ "$OS" == "arch" ]]; then
+            # For Arch Linux
+            $PKG_INSTALL nvtop || print_error "Failed to install nvtop"
+        elif [[ "$OS" == "redhat" ]]; then
+            # For RHEL/Fedora systems
+            if command_exists dnf; then
+                sudo dnf install -y nvtop || print_warning "nvtop not available in standard repos, please install manually"
+            else
+                print_warning "nvtop installation not supported on this RedHat variant, please install manually"
+            fi
+        elif [[ "$OS" == "macos" ]]; then
+            # For macOS - nvtop doesn't really work on macOS, suggest alternatives
+            print_warning "nvtop is Linux-specific. For macOS GPU monitoring, consider using:"
+            print_info "  - Activity Monitor (built-in)"
+            print_info "  - iStat Menus (third-party)"
+            print_info "  - asitop for Apple Silicon: pip3 install asitop"
+        else
+            print_warning "Please install nvtop manually for your system"
+        fi
+    fi
+}
+
 # Create symlinks for dotfiles
 create_symlinks() {
     print_info "Creating symlinks for dotfiles..."
@@ -261,6 +328,8 @@ main() {
     install_oh_my_bash || print_warning "Oh My Bash installation had issues"
     install_oh_my_tmux || print_warning "Oh My Tmux installation had issues"
     install_rust || print_warning "Rust installation had issues"
+    install_uv || print_warning "uv installation had issues"
+    install_nvtop || print_warning "nvtop installation had issues"
     
     # Create symlinks - this should always run
     create_symlinks
