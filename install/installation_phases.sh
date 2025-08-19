@@ -146,6 +146,12 @@ phase4_development_tools() {
         echo $? > "$results_dir/uv.status"
     ) & pids+=($!)
     
+    (
+        print_debug "Configuring pip mirror..."
+        install_pip_mirror
+        echo $? > "$results_dir/pip_mirror.status"
+    ) & pids+=($!)
+    
     # Monitor progress
     local total=${#pids[@]}
     local completed=0

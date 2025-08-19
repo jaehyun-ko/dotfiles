@@ -38,6 +38,10 @@ parse_arguments() {
                 export SKIP_MIRROR_CHANGE=true
                 shift
                 ;;
+            --skip-pip-mirror)
+                export SKIP_PIP_MIRROR=true
+                shift
+                ;;
             --auto-mirror)
                 export AUTO_MIRROR=true
                 shift
@@ -79,8 +83,9 @@ Options:
     --skip-confirmation, -y Skip all confirmation prompts
     --help, -h             Show this help message
 
-Mirror Options (Ubuntu/Debian only):
-    --skip-mirror          Skip APT mirror configuration
+Mirror Options:
+    --skip-mirror          Skip APT mirror configuration (Ubuntu/Debian)
+    --skip-pip-mirror      Skip pip mirror configuration
     --auto-mirror          Automatically select best mirror (no prompts)
     --fastest-mirror       Test and select fastest mirror (slower startup)
     --mirror-location LOC  Force specific mirror (kr, jp, cn, us)

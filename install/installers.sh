@@ -425,3 +425,70 @@ EOF
     print_warning "Could not automatically change default shell"
     print_info "Please manually run: chsh -s $zsh_path"
 }
+
+# Configure pip to use Kakao mirror for faster downloads in Korea
+install_pip_mirror() {
+    # Skip if user explicitly disabled pip mirror configuration
+    if [[ "$SKIP_PIP_MIRROR" == "true" ]]; then
+        print_info "Skipping pip mirror configuration (--skip-pip-mirror flag)"
+        return 0
+    fi
+    
+    # Auto-detect location and configure accordingly
+    local use_kakao_mirror=false
+    
+    if [[ "$AUTO_MIRROR" == "true" ]] || [[ "$MIRROR_LOCATION" == "kr" ]]; then
+        # Auto mode or forced Korean location
+        use_kakao_mirror=true
+        print_info "Configuring pip to use Kakao mirror (Korean mirror)..."
+    elif [[ -z "$MIRROR_LOCATION" ]]; then
+        # Try to detect location
+        local timezone=$(timedatectl 2>/dev/null | grep "Time zone" | awk '{print $3}' || echo "")
+        local locale=$(locale 2>/dev/null | grep "LANG" | cut -d= -f2 | cut -d_ -f2 | cut -d. -f1 || echo "")
+        
+        if [[ "$timezone" == "Asia/Seoul" ]] || [[ "$locale" == "KR" ]]; then
+            use_kakao_mirror=true
+            print_info "Detected Korean location, configuring pip to use Kakao mirror..."
+        else
+            print_info "Non-Korean location detected, skipping pip mirror configuration"
+            return 0
+        fi
+    else
+        print_info "Skipping pip mirror configuration for location: $MIRROR_LOCATION"
+        return 0
+    fi
+    
+    if [[ "$use_kakao_mirror" != "true" ]]; then
+        return 0
+    fi
+    
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would configure pip with Kakao mirror"
+        return 0
+    fi
+    
+    # Create .pip directory if it doesn't exist
+    mkdir -p "$HOME/.pip"
+    
+    # Backup existing pip.conf if it exists
+    if [ -f "$HOME/.pip/pip.conf" ]; then
+        backup_file "$HOME/.pip/pip.conf"
+    fi
+    
+    # Create pip configuration with Kakao mirror
+    cat > "$HOME/.pip/pip.conf" << 'EOF'
+[global]
+index-url = https://mirror.kakao.com/pypi/simple
+extra-index-url = https://pypi.python.org/simple
+trusted-host = mirror.kakao.com
+EOF
+    
+    if [ $? -eq 0 ]; then
+        print_status "Successfully configured pip to use Kakao mirror"
+        print_debug "pip will now use Kakao mirror for faster downloads in Korea"
+        return 0
+    else
+        print_warning "Failed to configure pip mirror"
+        return 1
+    fi
+}
