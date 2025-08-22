@@ -334,6 +334,19 @@ install_nvtop_from_source() {
 create_symlinks() {
     print_info "Creating symlinks for dotfiles..."
     
+    # Save current git config before symlinking
+    local git_user_name=""
+    local git_user_email=""
+    
+    if [ -f "$HOME/.gitconfig" ]; then
+        git_user_name=$(git config --global user.name 2>/dev/null || echo "")
+        git_user_email=$(git config --global user.email 2>/dev/null || echo "")
+        
+        if [ -n "$git_user_name" ] || [ -n "$git_user_email" ]; then
+            print_info "Preserving existing git configuration..."
+        fi
+    fi
+    
     for file in "${DOTFILES_TO_LINK[@]}"; do
         local source_file="$DOTFILES_DIR/$file"
         local target_file="$HOME/$file"
@@ -364,6 +377,18 @@ create_symlinks() {
         
         print_status "Created symlink for $file"
     done
+    
+    # Restore git config after symlinking
+    if [ -n "$git_user_name" ] || [ -n "$git_user_email" ]; then
+        if [ -n "$git_user_name" ]; then
+            git config --global user.name "$git_user_name"
+            print_status "Restored git user.name: $git_user_name"
+        fi
+        if [ -n "$git_user_email" ]; then
+            git config --global user.email "$git_user_email"
+            print_status "Restored git user.email: $git_user_email"
+        fi
+    fi
 }
 
 # Change default shell to zsh
