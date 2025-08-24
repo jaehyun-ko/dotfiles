@@ -96,7 +96,8 @@ install_packages_parallel() {
     done
     
     # Check results
-    for status_file in "$status_dir"/*.status 2>/dev/null; do
+    shopt -s nullglob
+    for status_file in "$status_dir"/*.status; do
         if [ -f "$status_file" ]; then
             local status=$(cat "$status_file")
             if [ "$status" -ne 0 ]; then
@@ -104,6 +105,7 @@ install_packages_parallel() {
             fi
         fi
     done
+    shopt -u nullglob
     
     # Cleanup
     rm -rf "$status_dir"
