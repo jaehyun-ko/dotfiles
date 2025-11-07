@@ -67,19 +67,19 @@ export DOTFILES_TO_LINK=(
 )
 
 # Installation options
-export PARALLEL_JOBS=4  # Number of parallel installation jobs
-export RETRY_COUNT=3    # Number of retries for failed operations
-export RETRY_DELAY=2    # Delay in seconds between retries
-export FORCE_INSTALL=false  # Force reinstall even if already installed
-export VERBOSE=false    # Verbose output
-export DRY_RUN=false    # Dry run mode (don't actually install)
-export SKIP_CONFIRMATION=false  # Skip confirmation prompts
+export PARALLEL_JOBS="${PARALLEL_JOBS:-4}"  # Number of parallel installation jobs
+export RETRY_COUNT="${RETRY_COUNT:-3}"    # Number of retries for failed operations
+export RETRY_DELAY="${RETRY_DELAY:-2}"    # Delay in seconds between retries
+export FORCE_INSTALL="${FORCE_INSTALL:-false}"  # Force reinstall even if already installed
+export VERBOSE="${VERBOSE:-false}"    # Verbose output
+export DRY_RUN="${DRY_RUN:-false}"    # Dry run mode (don't actually install)
+export SKIP_CONFIRMATION="${SKIP_CONFIRMATION:-false}"  # Skip confirmation prompts
 
 # Mirror configuration
-export SKIP_MIRROR_CHANGE=false  # Skip APT mirror configuration
-export AUTO_MIRROR=false  # Automatically select best mirror without prompting
-export FASTEST_MIRROR=false  # Test and use fastest mirror (takes time)
-export MIRROR_LOCATION=""  # Force specific mirror location (kr, jp, cn, us)
+export SKIP_MIRROR_CHANGE="${SKIP_MIRROR_CHANGE:-false}"  # Skip APT mirror configuration
+export AUTO_MIRROR="${AUTO_MIRROR:-false}"  # Automatically select best mirror without prompting
+export FASTEST_MIRROR="${FASTEST_MIRROR:-false}"  # Test and use fastest mirror (takes time)
+export MIRROR_LOCATION="${MIRROR_LOCATION:-}"  # Force specific mirror location (kr, jp, cn, us)
 
 # Colors (exported from utils.sh)
-export COLOR_ENABLED=true  # Set to false to disable colored output
+export COLOR_ENABLED="${COLOR_ENABLED:-true}"  # Set to false to disable colored output

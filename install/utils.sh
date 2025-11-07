@@ -25,8 +25,8 @@ fi
 log_init() {
     mkdir -p "$LOG_DIR"
     touch "$LOG_FILE"
-    log_info "Installation started at $(date)"
-    log_info "Installer version: $INSTALLER_VERSION"
+    log_to_file "INFO: Installation started at $(date)"
+    log_to_file "INFO: Installer version: $INSTALLER_VERSION"
 }
 
 log_to_file() {
