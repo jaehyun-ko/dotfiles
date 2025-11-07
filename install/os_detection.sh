@@ -185,11 +185,24 @@ check_system_requirements() {
     fi
     
     # Check internet connectivity
-    if ! curl -s --head --connect-timeout 5 https://github.com > /dev/null; then
+    local connectivity_urls=(
+        "https://github.com"
+        "https://www.google.com"
+        "http://example.com"
+    )
+    local has_connectivity=false
+
+    for url in "${connectivity_urls[@]}"; do
+        if curl -s --head --connect-timeout 5 "$url" >/dev/null 2>&1; then
+            print_debug "Internet connectivity confirmed via $url"
+            has_connectivity=true
+            break
+        fi
+    done
+
+    if [[ "$has_connectivity" != true ]]; then
         print_error "No internet connectivity detected"
         return 1
-    else
-        print_debug "Internet connectivity confirmed"
     fi
     
     # Check sudo privileges (if not macOS)
@@ -200,7 +213,7 @@ check_system_requirements() {
             print_debug "Sudo privileges confirmed"
         fi
     fi
-    
+
     return 0
 }
 

@@ -60,34 +60,34 @@ install_package() {
 
 # Install multiple packages in parallel
 install_packages_parallel() {
-    local -n packages=$1
+    local -n packages_list=$1
     local required="${2:-true}"
     local pids=()
     local failed=0
-    
-    print_info "Installing ${#packages[@]} packages..."
+
+    print_info "Installing ${#packages_list[@]} packages..."
     
     # Create temp directory for status files
     local status_dir=$(create_temp_dir)
-    
+
     local count=0
-    for package in "${packages[@]}"; do
+    for package in "${packages_list[@]}"; do
         if [ $count -ge $PARALLEL_JOBS ]; then
             # Wait for a slot to be available
             wait -n
         fi
-        
+
         (
             install_package "$package" "$required"
             echo $? > "$status_dir/$(basename "$package").status"
         ) &
-        
+
         pids+=($!)
         count=$((count + 1))
-        
+
         # Update progress
-        local installed=$((${#packages[@]} - ${#pids[@]} + 1))
-        show_progress "$installed" "${#packages[@]}" "Installing packages"
+        local installed=$((${#packages_list[@]} - ${#pids[@]} + 1))
+        show_progress "$installed" "${#packages_list[@]}" "Installing packages"
     done
     
     # Wait for all background jobs
@@ -121,16 +121,16 @@ install_packages_parallel() {
 
 # Install packages sequentially
 install_packages_sequential() {
-    local -n packages=$1
+    local -n packages_list=$1
     local required="${2:-true}"
     local failed=0
-    local total=${#packages[@]}
+    local total=${#packages_list[@]}
     local current=0
-    
-    for package in "${packages[@]}"; do
+
+    for package in "${packages_list[@]}"; do
         current=$((current + 1))
         show_progress "$current" "$total" "Installing packages"
-        
+
         if ! install_package "$package" "$required"; then
             failed=$((failed + 1))
         fi
@@ -147,19 +147,19 @@ install_packages_sequential() {
 
 # Main package installation function
 install_packages() {
-    local -n packages=$1
+    local -n packages_ref=$1
     local required="${2:-true}"
     local parallel="${3:-true}"
-    
-    if [ ${#packages[@]} -eq 0 ]; then
+
+    if [ ${#packages_ref[@]} -eq 0 ]; then
         print_debug "No packages to install"
         return 0
     fi
-    
-    if [[ "$parallel" == "true" ]] && [ ${#packages[@]} -gt 1 ]; then
-        install_packages_parallel packages "$required"
+
+    if [[ "$parallel" == "true" ]] && [ ${#packages_ref[@]} -gt 1 ]; then
+        install_packages_parallel packages_ref "$required"
     else
-        install_packages_sequential packages "$required"
+        install_packages_sequential packages_ref "$required"
     fi
 }
 
