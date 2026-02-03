@@ -150,7 +150,8 @@ install_oh_my_bash() {
 
 # Install Oh My Tmux
 install_oh_my_tmux() {
-    if [ -f "$HOME/.tmux.conf" ] && [[ "$FORCE_INSTALL" != "true" ]]; then
+    # Check if oh-my-tmux is actually installed (directory exists and symlink is valid)
+    if [ -d "$HOME/.tmux" ] && [ -L "$HOME/.tmux.conf" ] && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "Oh My Tmux is already installed"
         return 0
     fi
