@@ -1,13 +1,4 @@
-# SuperClaude Entry Point
-
-@COMMANDS.md
-@FLAGS.md
-@PRINCIPLES.md
-@RULES.md
-@MCP.md
-@PERSONAS.md
-@ORCHESTRATOR.md
-@MODES.md
+# Dotfiles
 
 - Omit "Co-authored-by: Claude" from git commits
 - Always use `uv` for Python projects:
