@@ -204,10 +204,18 @@ phase6_configuration() {
     print_info "Creating dotfile symlinks..."
     create_symlinks || print_warning "Some symlinks failed"
     
-    # 6.2 Change default shell (should be last)
+    # 6.2 Claude Code configuration (optional)
+    echo
+    if confirm "Install Claude Code configuration? (ML stack guide + Kosmos rules)"; then
+        install_claude_config || print_warning "Claude config installation had issues"
+    else
+        print_info "Skipping Claude Code configuration"
+    fi
+
+    # 6.3 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
-    
+
     print_status "Phase 6 completed: Configuration applied"
     return 0
 }
@@ -357,6 +365,15 @@ validate_installation() {
         checks+=("⚠️  Rust/Cargo")
     fi
     
+    # Check Claude config
+    if [ -d "$HOME/.claude" ] && [ -L "$HOME/.claude/rules" ]; then
+        checks+=("✅ Claude Code Config")
+    elif [ -d "$HOME/.claude" ]; then
+        checks+=("⚠️  Claude Code Config (partial)")
+    else
+        checks+=("⚠️  Claude Code Config (not installed)")
+    fi
+
     # Check symlinks
     local symlink_count=0
     for file in "${DOTFILES_TO_LINK[@]}"; do

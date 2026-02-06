@@ -331,6 +331,60 @@ install_nvtop_from_source() {
     print_status "nvtop built and installed from source"
 }
 
+# Install Claude Code configuration (from submodule)
+install_claude_config() {
+    local claude_dir="$SCRIPT_DIR/../claude"
+    local claude_install="$claude_dir/install.sh"
+
+    if [ ! -f "$claude_install" ]; then
+        # Submodule not initialized - try to init
+        print_info "Initializing Claude config submodule..."
+
+        if [[ "$DRY_RUN" == "true" ]]; then
+            print_debug "[DRY RUN] Would initialize claude submodule"
+            return 0
+        fi
+
+        cd "$SCRIPT_DIR/.." || return 1
+        git submodule update --init claude 2>/dev/null || {
+            print_warning "Failed to initialize claude submodule"
+            print_info "You can manually clone: git clone git@github.com:jaehyun-ko/claude-dotfiles.git claude"
+            return 1
+        }
+    fi
+
+    if [ ! -f "$claude_install" ]; then
+        print_warning "Claude config not found at $claude_install"
+        return 1
+    fi
+
+    # Skip if already fully configured
+    if [[ "$FORCE_INSTALL" != "true" ]] && [ -L "$HOME/.claude/CLAUDE.md" ] && [ -L "$HOME/.claude/rules" ]; then
+        local current_target
+        current_target="$(readlink -f "$HOME/.claude/CLAUDE.md" 2>/dev/null)"
+        local expected_target
+        expected_target="$(readlink -f "$claude_dir/CLAUDE.md" 2>/dev/null)"
+        if [ "$current_target" = "$expected_target" ]; then
+            print_status "Claude Code configuration already installed (skipping)"
+            return 0
+        fi
+    fi
+
+    print_info "Installing Claude Code configuration..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would run claude/install.sh"
+        return 0
+    fi
+
+    DOTFILES_CLAUDE="$claude_dir" bash "$claude_install" || {
+        print_warning "Claude config installation had issues"
+        return 1
+    }
+
+    print_status "Claude Code configuration installed"
+}
+
 # Create symlinks for dotfiles
 create_symlinks() {
     print_info "Creating symlinks for dotfiles..."
