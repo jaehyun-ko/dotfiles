@@ -1,7 +1,6 @@
-# Dotfiles
+# Global Claude Settings
 
-- Omit "Co-authored-by: Claude" from git commits
-- Always use `uv` for Python projects:
-  - Use `uv add <package>` instead of `pip install`
-  - Use `uv run python` instead of `python`
-  - Use `uv run <command>` for running commands in the project environment
+- Omit "Co-authored-by: Claude" from commits
+- Python: use `uv` (not pip/python directly)
+- Node: use project's package manager (npm/yarn/pnpm)
+- 한국어로 응답
