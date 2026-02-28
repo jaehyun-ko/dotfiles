@@ -38,6 +38,10 @@ parse_arguments() {
                 export SKIP_MIRROR_CHANGE=true
                 shift
                 ;;
+            --skip-codex-sync)
+                export SKIP_CODEX_SYNC_STACK=true
+                shift
+                ;;
             --skip-pip-mirror)
                 export SKIP_PIP_MIRROR=true
                 shift
@@ -85,6 +89,7 @@ Options:
 
 Mirror Options:
     --skip-mirror          Skip APT mirror configuration (Ubuntu/Debian)
+    --skip-codex-sync      Skip Codex/OMX sync wrapper + timer setup
     --skip-pip-mirror      Skip pip mirror configuration
     --auto-mirror          Automatically select best mirror (no prompts)
     --fastest-mirror       Test and select fastest mirror (slower startup)
@@ -108,6 +113,9 @@ Examples:
 
     # Skip mirror change (use current sources)
     $0 --skip-mirror
+
+    # Skip Codex/OMX sync stack installation
+    $0 --skip-codex-sync
 
 EOF
 }

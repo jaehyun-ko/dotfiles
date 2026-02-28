@@ -572,3 +572,162 @@ EOF
         return 1
     fi
 }
+
+resolve_agentic_researcher_repo() {
+    local candidates=(
+        "${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
+        "$HOME/agentic-researcher"
+        "$HOME/work/agentic-researcher"
+    )
+    local path
+    for path in "${candidates[@]}"; do
+        if [ -f "$path/scripts/skill_autoupdate.py" ]; then
+            echo "$path"
+            return 0
+        fi
+    done
+    return 1
+}
+
+run_npm_global_install() {
+    local package="$1"
+    if command_exists npm; then
+        retry_command "npm install -g '$package'" "install $package"
+        return $?
+    fi
+
+    if [ -s "$HOME/.nvm/nvm.sh" ]; then
+        retry_command "bash -lc 'source \"$HOME/.nvm/nvm.sh\" && npm install -g \"$package\"'" "install $package via nvm"
+        return $?
+    fi
+
+    print_warning "npm not found; cannot install $package"
+    return 1
+}
+
+install_codex_cli() {
+    if command_exists codex && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Codex CLI is already installed"
+        return 0
+    fi
+
+    print_info "Installing Codex CLI (@openai/codex)..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would install @openai/codex"
+        return 0
+    fi
+
+    run_npm_global_install "@openai/codex" || {
+        print_warning "Failed to install Codex CLI"
+        return 1
+    }
+    print_status "Codex CLI installed"
+}
+
+install_oh_my_codex_cli() {
+    if command_exists omx && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "oh-my-codex is already installed"
+        return 0
+    fi
+
+    print_info "Installing oh-my-codex..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would install oh-my-codex"
+        return 0
+    fi
+
+    run_npm_global_install "oh-my-codex" || {
+        print_warning "Failed to install oh-my-codex"
+        return 1
+    }
+    print_status "oh-my-codex installed"
+}
+
+install_codex_sync_launchers() {
+    print_info "Installing codex/omx sync launchers..."
+    local launchers=("codex-sync" "omx-sync")
+    local target_dir="$HOME/.local/bin"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        for name in "${launchers[@]}"; do
+            print_debug "[DRY RUN] Would link $DOTFILES_DIR/bin/$name -> $target_dir/$name"
+        done
+        return 0
+    fi
+
+    mkdir -p "$target_dir"
+    local name
+    for name in "${launchers[@]}"; do
+        local src="$DOTFILES_DIR/bin/$name"
+        local dst="$target_dir/$name"
+        if [ ! -f "$src" ]; then
+            print_warning "Launcher not found: $src"
+            continue
+        fi
+        chmod +x "$src" 2>/dev/null || true
+        ln -sf "$src" "$dst" || {
+            print_warning "Failed to create launcher link: $dst"
+            continue
+        }
+        print_status "Installed launcher: $dst"
+    done
+}
+
+install_codex_skill_sync_timer() {
+    print_info "Installing user systemd timer for skill sync..."
+
+    if ! command_exists systemctl; then
+        print_warning "systemctl not found; skipping timer installation"
+        return 0
+    fi
+
+    local repo_path
+    repo_path="$(resolve_agentic_researcher_repo 2>/dev/null || true)"
+    if [ -z "$repo_path" ]; then
+        print_warning "agentic-researcher repo not found; skipping timer installation"
+        print_info "Set AGENTIC_RESEARCHER_REPO and rerun install if needed"
+        return 0
+    fi
+
+    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    local service_src="$DOTFILES_DIR/systemd/user/agentic-skill-updater.service"
+    local timer_src="$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer"
+    local service_dst="$user_systemd_dir/agentic-skill-updater.service"
+    local timer_dst="$user_systemd_dir/agentic-skill-updater.timer"
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
+        print_debug "[DRY RUN] Would enable agentic-skill-updater.timer"
+        return 0
+    fi
+
+    mkdir -p "$user_systemd_dir"
+    sed \
+        -e "s|__REPO_DIR__|$repo_path|g" \
+        -e "s|__CHANNEL__|$SKILL_SYNC_CHANNEL|g" \
+        -e "s|__CANARY_PERCENT__|$SKILL_SYNC_CANARY_PERCENT|g" \
+        -e "s|__INSTALL_ROOT__|$SKILL_SYNC_INSTALL_ROOT|g" \
+        -e "s|__SKILL_NAME__|$SKILL_SYNC_SKILL_NAME|g" \
+        "$service_src" > "$service_dst"
+    cp "$timer_src" "$timer_dst"
+
+    if ! systemctl --user daemon-reload; then
+        print_warning "systemctl --user daemon-reload failed"
+        return 1
+    fi
+    if ! systemctl --user enable --now agentic-skill-updater.timer; then
+        print_warning "Failed to enable agentic-skill-updater.timer"
+        return 1
+    fi
+
+    print_status "Installed and enabled agentic-skill-updater.timer"
+}
+
+install_codex_omx_sync_stack() {
+    print_info "Installing Codex/OMX sync stack..."
+    install_codex_cli || print_warning "Codex CLI install step had issues"
+    install_oh_my_codex_cli || print_warning "oh-my-codex install step had issues"
+    install_codex_sync_launchers || print_warning "launcher installation had issues"
+    install_codex_skill_sync_timer || print_warning "timer installation had issues"
+    print_status "Codex/OMX sync stack setup completed"
+}

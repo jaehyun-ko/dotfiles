@@ -1,0 +1,8 @@
+[Unit]
+Description=Agentic Researcher Skill Auto Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash -lc 'uv run python "__REPO_DIR__/scripts/skill_autoupdate.py" --repo-dir "__REPO_DIR__" --skill-name "__SKILL_NAME__" --channel "__CHANNEL__" --canary-percent "__CANARY_PERCENT__" --install-root "__INSTALL_ROOT__"'

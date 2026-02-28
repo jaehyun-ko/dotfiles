@@ -212,7 +212,17 @@ phase6_configuration() {
         print_info "Skipping Claude Code configuration"
     fi
 
-    # 6.3 Change default shell (should be last)
+    # 6.3 Codex/OMX sync stack (optional)
+    echo
+    if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
+        print_info "Skipping Codex/OMX sync stack (--skip-codex-sync)"
+    elif confirm "Install Codex/OMX sync launchers + skill sync timer?"; then
+        install_codex_omx_sync_stack || print_warning "Codex/OMX sync stack had issues"
+    else
+        print_info "Skipping Codex/OMX sync stack"
+    fi
+
+    # 6.4 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
 
@@ -364,7 +374,27 @@ validate_installation() {
     else
         checks+=("⚠️  Rust/Cargo")
     fi
-    
+
+    if command_exists codex; then
+        checks+=("✅ Codex CLI")
+    else
+        checks+=("⚠️  Codex CLI")
+    fi
+
+    if command_exists omx; then
+        checks+=("✅ oh-my-codex")
+    else
+        checks+=("⚠️  oh-my-codex")
+    fi
+
+    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omx-sync" ]; then
+        checks+=("✅ codex/omx sync launchers")
+    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omx-sync" ]; then
+        checks+=("⚠️  codex/omx sync launchers (partial)")
+    else
+        checks+=("⚠️  codex/omx sync launchers")
+    fi
+
     # Check Claude config
     if [ -d "$HOME/.claude" ] && [ -L "$HOME/.claude/rules" ]; then
         checks+=("✅ Claude Code Config")

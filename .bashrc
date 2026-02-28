@@ -4,6 +4,11 @@ case $- in
     *) return;;
 esac
 
+case ":$PATH:" in
+  *":$HOME/.local/bin:"*) ;;
+  *) export PATH="$HOME/.local/bin:$PATH" ;;
+esac
+
 
 # 사용하고자 하는 플러그인을 여기에 나열합니다.
 plugins=(
