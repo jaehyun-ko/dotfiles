@@ -103,6 +103,11 @@ install_nvm() {
     # Source NVM and install latest Node.js
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+    if command_exists node && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Node.js is already installed"
+        return 0
+    fi
     
     if command_exists nvm; then
         print_info "Installing latest Node.js via NVM..."
@@ -415,6 +420,15 @@ create_symlinks() {
             print_debug "[DRY RUN] Would link $source_file to $target_file"
             continue
         fi
+
+        if [ -L "$target_file" ]; then
+            local current_link
+            current_link="$(readlink "$target_file" 2>/dev/null || true)"
+            if [ "$current_link" = "$source_file" ] && [ -e "$target_file" ]; then
+                print_status "$file is already linked correctly"
+                continue
+            fi
+        fi
         
         # Backup existing file
         if [ -f "$target_file" ] && [ ! -L "$target_file" ]; then
@@ -589,6 +603,70 @@ resolve_agentic_researcher_repo() {
     return 1
 }
 
+is_claude_config_installed() {
+    if [ -L "$HOME/.claude/CLAUDE.md" ] && [ -L "$HOME/.claude/rules" ]; then
+        return 0
+    fi
+    return 1
+}
+
+is_codex_sync_launcher_installed() {
+    local name="$1"
+    local src="$DOTFILES_DIR/bin/$name"
+    local dst="$HOME/.local/bin/$name"
+    if [ ! -x "$dst" ] || [ ! -f "$src" ]; then
+        return 1
+    fi
+    if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
+        return 0
+    fi
+    return 1
+}
+
+is_codex_skill_sync_timer_ready() {
+    if ! command_exists systemctl; then
+        return 1
+    fi
+
+    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    local service_dst="$user_systemd_dir/agentic-skill-updater.service"
+    local timer_dst="$user_systemd_dir/agentic-skill-updater.timer"
+    local repo_path
+    repo_path="$(resolve_agentic_researcher_repo 2>/dev/null || true)"
+
+    if [ -z "$repo_path" ] || [ ! -f "$service_dst" ] || [ ! -f "$timer_dst" ]; then
+        return 1
+    fi
+
+    if ! grep -Fq "$repo_path" "$service_dst"; then
+        return 1
+    fi
+    if ! grep -Fq "$SKILL_SYNC_SKILL_NAME" "$service_dst"; then
+        return 1
+    fi
+    if ! systemctl --user is-enabled agentic-skill-updater.timer >/dev/null 2>&1; then
+        return 1
+    fi
+
+    return 0
+}
+
+is_codex_omx_sync_stack_ready() {
+    if ! command_exists codex || ! command_exists omx; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "codex-sync"; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "omx-sync"; then
+        return 1
+    fi
+    if command_exists systemctl && ! is_codex_skill_sync_timer_ready; then
+        return 1
+    fi
+    return 0
+}
+
 run_npm_global_install() {
     local package="$1"
     if command_exists npm; then
@@ -664,6 +742,10 @@ install_codex_sync_launchers() {
             print_warning "Launcher not found: $src"
             continue
         fi
+        if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ] && [ -x "$dst" ] && [[ "$FORCE_INSTALL" != "true" ]]; then
+            print_status "Launcher already installed: $dst"
+            continue
+        fi
         chmod +x "$src" 2>/dev/null || true
         ln -sf "$src" "$dst" || {
             print_warning "Failed to create launcher link: $dst"
@@ -694,22 +776,34 @@ install_codex_skill_sync_timer() {
     local timer_src="$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer"
     local service_dst="$user_systemd_dir/agentic-skill-updater.service"
     local timer_dst="$user_systemd_dir/agentic-skill-updater.timer"
+    local expected_service
+    expected_service="$(mktemp)"
 
     if [[ "$DRY_RUN" == "true" ]]; then
         print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
         print_debug "[DRY RUN] Would enable agentic-skill-updater.timer"
+        rm -f "$expected_service"
         return 0
     fi
 
-    mkdir -p "$user_systemd_dir"
     sed \
         -e "s|__REPO_DIR__|$repo_path|g" \
         -e "s|__CHANNEL__|$SKILL_SYNC_CHANNEL|g" \
         -e "s|__CANARY_PERCENT__|$SKILL_SYNC_CANARY_PERCENT|g" \
         -e "s|__INSTALL_ROOT__|$SKILL_SYNC_INSTALL_ROOT|g" \
         -e "s|__SKILL_NAME__|$SKILL_SYNC_SKILL_NAME|g" \
-        "$service_src" > "$service_dst"
+        "$service_src" > "$expected_service"
+
+    if [ -f "$service_dst" ] && [ -f "$timer_dst" ] && cmp -s "$expected_service" "$service_dst" && cmp -s "$timer_src" "$timer_dst" && systemctl --user is-enabled agentic-skill-updater.timer >/dev/null 2>&1 && [[ "$FORCE_INSTALL" != "true" ]]; then
+        rm -f "$expected_service"
+        print_status "agentic-skill-updater.timer is already configured"
+        return 0
+    fi
+
+    mkdir -p "$user_systemd_dir"
+    cp "$expected_service" "$service_dst"
     cp "$timer_src" "$timer_dst"
+    rm -f "$expected_service"
 
     if ! systemctl --user daemon-reload; then
         print_warning "systemctl --user daemon-reload failed"
@@ -724,6 +818,10 @@ install_codex_skill_sync_timer() {
 }
 
 install_codex_omx_sync_stack() {
+    if is_codex_omx_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Codex/OMX sync stack is already configured"
+        return 0
+    fi
     print_info "Installing Codex/OMX sync stack..."
     install_codex_cli || print_warning "Codex CLI install step had issues"
     install_oh_my_codex_cli || print_warning "oh-my-codex install step had issues"

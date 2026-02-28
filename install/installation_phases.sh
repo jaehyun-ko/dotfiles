@@ -206,7 +206,9 @@ phase6_configuration() {
     
     # 6.2 Claude Code configuration (optional)
     echo
-    if confirm "Install Claude Code configuration? (ML stack guide + Kosmos rules)"; then
+    if is_claude_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Claude Code configuration already installed (auto-skip)"
+    elif confirm "Install Claude Code configuration? (ML stack guide + Kosmos rules)"; then
         install_claude_config || print_warning "Claude config installation had issues"
     else
         print_info "Skipping Claude Code configuration"
@@ -216,6 +218,8 @@ phase6_configuration() {
     echo
     if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
         print_info "Skipping Codex/OMX sync stack (--skip-codex-sync)"
+    elif is_codex_omx_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Codex/OMX sync stack already configured (auto-skip)"
     elif confirm "Install Codex/OMX sync launchers + skill sync timer?"; then
         install_codex_omx_sync_stack || print_warning "Codex/OMX sync stack had issues"
     else
@@ -336,14 +340,22 @@ validate_installation() {
     print_header "Validating Installation"
     
     local validation_passed=true
+    local strict_validation=true
     local checks=()
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        strict_validation=false
+        print_info "Dry-run mode: validation is informational only"
+    fi
     
     # Check shell frameworks
     if [ -d "$HOME/.oh-my-zsh" ]; then
         checks+=("✅ Oh My Zsh")
     else
         checks+=("❌ Oh My Zsh")
-        validation_passed=false
+        if [[ "$strict_validation" == "true" ]]; then
+            validation_passed=false
+        fi
     fi
     
     # Check for zsh
@@ -351,7 +363,9 @@ validate_installation() {
         checks+=("✅ Zsh")
     else
         checks+=("❌ Zsh")
-        validation_passed=false
+        if [[ "$strict_validation" == "true" ]]; then
+            validation_passed=false
+        fi
     fi
     
     # Check for git
@@ -359,7 +373,9 @@ validate_installation() {
         checks+=("✅ Git")
     else
         checks+=("❌ Git")
-        validation_passed=false
+        if [[ "$strict_validation" == "true" ]]; then
+            validation_passed=false
+        fi
     fi
     
     # Check for development tools
@@ -418,7 +434,9 @@ validate_installation() {
         checks+=("⚠️  Dotfile Symlinks ($symlink_count/${#DOTFILES_TO_LINK[@]})")
     else
         checks+=("❌ Dotfile Symlinks")
-        validation_passed=false
+        if [[ "$strict_validation" == "true" ]]; then
+            validation_passed=false
+        fi
     fi
     
     # Print validation results
