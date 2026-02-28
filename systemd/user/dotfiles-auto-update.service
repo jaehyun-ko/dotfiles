@@ -1,0 +1,8 @@
+[Unit]
+Description=Dotfiles Auto Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/env bash -lc '"__DOTFILES_DIR__/bin/dotfiles-sync" --repo "__DOTFILES_DIR__" --remote "__DOTFILES_REMOTE__" --branch "__DOTFILES_BRANCH__"'

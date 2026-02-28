@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEFAULT_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+DOTFILES_REPO="${DOTFILES_REPO:-$DEFAULT_REPO}"
+DOTFILES_REMOTE="${DOTFILES_REMOTE:-origin}"
+DOTFILES_BRANCH="${DOTFILES_BRANCH:-main}"
+DRY_RUN=0
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --repo)
+      DOTFILES_REPO="$2"
+      shift 2
+      ;;
+    --remote)
+      DOTFILES_REMOTE="$2"
+      shift 2
+      ;;
+    --branch)
+      DOTFILES_BRANCH="$2"
+      shift 2
+      ;;
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    --help|-h)
+      cat <<'EOF'
+Usage: dotfiles-sync [--repo PATH] [--remote NAME] [--branch NAME] [--dry-run]
+EOF
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! git -C "$DOTFILES_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "[skip] not a git repo: $DOTFILES_REPO"
+  exit 0
+fi
+
+if ! git -C "$DOTFILES_REPO" remote get-url "$DOTFILES_REMOTE" >/dev/null 2>&1; then
+  echo "[skip] remote not found: $DOTFILES_REMOTE"
+  exit 0
+fi
+
+if ! git -C "$DOTFILES_REPO" diff --quiet --ignore-submodules --; then
+  echo "[skip] repo has unstaged changes: $DOTFILES_REPO"
+  exit 0
+fi
+
+if ! git -C "$DOTFILES_REPO" diff --cached --quiet --ignore-submodules --; then
+  echo "[skip] repo has staged changes: $DOTFILES_REPO"
+  exit 0
+fi
+
+if [ -n "$(git -C "$DOTFILES_REPO" ls-files --others --exclude-standard)" ]; then
+  echo "[skip] repo has untracked files: $DOTFILES_REPO"
+  exit 0
+fi
+
+before="$(git -C "$DOTFILES_REPO" rev-parse --short HEAD)"
+
+if [[ "$DRY_RUN" == "1" ]]; then
+  echo "[dry-run] would run: git -C \"$DOTFILES_REPO\" pull --ff-only \"$DOTFILES_REMOTE\" \"$DOTFILES_BRANCH\""
+  exit 0
+fi
+
+if ! git -C "$DOTFILES_REPO" pull --ff-only "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"; then
+  echo "[error] dotfiles pull failed for $DOTFILES_REPO" >&2
+  exit 1
+fi
+
+after="$(git -C "$DOTFILES_REPO" rev-parse --short HEAD)"
+
+if [[ "$before" == "$after" ]]; then
+  echo "[ok] dotfiles already up to date ($after)"
+else
+  echo "[ok] dotfiles updated: $before -> $after"
+fi

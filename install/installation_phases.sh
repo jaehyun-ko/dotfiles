@@ -214,19 +214,27 @@ phase6_configuration() {
         print_info "Skipping Claude Code configuration"
     fi
 
-    # 6.3 Codex/OMX sync stack (optional)
+    # 6.3 Codex/OMX sync stack
     echo
     if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
         print_info "Skipping Codex/OMX sync stack (--skip-codex-sync)"
     elif is_codex_omx_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "Codex/OMX sync stack already configured (auto-skip)"
-    elif confirm "Install Codex/OMX sync launchers + skill sync timer?"; then
-        install_codex_omx_sync_stack || print_warning "Codex/OMX sync stack had issues"
     else
-        print_info "Skipping Codex/OMX sync stack"
+        install_codex_omx_sync_stack || print_warning "Codex/OMX sync stack had issues"
     fi
 
-    # 6.4 Change default shell (should be last)
+    # 6.4 Dotfiles auto-update timer
+    echo
+    if [[ "$SKIP_DOTFILES_AUTO_UPDATE" == "true" ]]; then
+        print_info "Skipping dotfiles auto-update timer (--skip-dotfiles-autoupdate)"
+    elif is_dotfiles_auto_update_timer_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "dotfiles auto-update timer already configured (auto-skip)"
+    else
+        install_dotfiles_auto_update_timer || print_warning "dotfiles auto-update timer had issues"
+    fi
+
+    # 6.5 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
 
@@ -409,6 +417,14 @@ validate_installation() {
         checks+=("⚠️  codex/omx sync launchers (partial)")
     else
         checks+=("⚠️  codex/omx sync launchers")
+    fi
+
+    if is_dotfiles_auto_update_timer_ready; then
+        checks+=("✅ dotfiles auto-update timer")
+    elif command_exists systemctl; then
+        checks+=("⚠️  dotfiles auto-update timer")
+    else
+        checks+=("⚠️  dotfiles auto-update timer (systemctl unavailable)")
     fi
 
     # Check Claude config

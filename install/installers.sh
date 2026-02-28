@@ -661,9 +661,53 @@ is_codex_omx_sync_stack_ready() {
     if ! is_codex_sync_launcher_installed "omx-sync"; then
         return 1
     fi
+    if ! is_codex_sync_launcher_installed "dotfiles-sync"; then
+        return 1
+    fi
     if command_exists systemctl && ! is_codex_skill_sync_timer_ready; then
         return 1
     fi
+    return 0
+}
+
+is_dotfiles_auto_update_timer_ready() {
+    if ! command_exists systemctl; then
+        return 1
+    fi
+
+    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    local service_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service"
+    local timer_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer"
+    local service_dst="$user_systemd_dir/dotfiles-auto-update.service"
+    local timer_dst="$user_systemd_dir/dotfiles-auto-update.timer"
+    local expected_service
+    expected_service="$(mktemp)"
+
+    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ] || [ ! -f "$service_dst" ] || [ ! -f "$timer_dst" ]; then
+        rm -f "$expected_service"
+        return 1
+    fi
+
+    sed \
+        -e "s|__DOTFILES_DIR__|$DOTFILES_DIR|g" \
+        -e "s|__DOTFILES_REMOTE__|$DOTFILES_AUTO_UPDATE_REMOTE|g" \
+        -e "s|__DOTFILES_BRANCH__|$DOTFILES_AUTO_UPDATE_BRANCH|g" \
+        "$service_src" > "$expected_service"
+
+    if ! cmp -s "$expected_service" "$service_dst"; then
+        rm -f "$expected_service"
+        return 1
+    fi
+    if ! cmp -s "$timer_src" "$timer_dst"; then
+        rm -f "$expected_service"
+        return 1
+    fi
+    rm -f "$expected_service"
+
+    if ! systemctl --user is-enabled dotfiles-auto-update.timer >/dev/null 2>&1; then
+        return 1
+    fi
+
     return 0
 }
 
@@ -723,7 +767,7 @@ install_oh_my_codex_cli() {
 
 install_codex_sync_launchers() {
     print_info "Installing codex/omx sync launchers..."
-    local launchers=("codex-sync" "omx-sync")
+    local launchers=("codex-sync" "omx-sync" "dotfiles-sync")
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then
@@ -815,6 +859,64 @@ install_codex_skill_sync_timer() {
     fi
 
     print_status "Installed and enabled agentic-skill-updater.timer"
+}
+
+install_dotfiles_auto_update_timer() {
+    print_info "Installing dotfiles auto-update timer..."
+
+    if ! command_exists systemctl; then
+        print_warning "systemctl not found; skipping dotfiles auto-update timer"
+        return 0
+    fi
+
+    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+    local service_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service"
+    local timer_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer"
+    local service_dst="$user_systemd_dir/dotfiles-auto-update.service"
+    local timer_dst="$user_systemd_dir/dotfiles-auto-update.timer"
+    local expected_service
+    expected_service="$(mktemp)"
+
+    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ]; then
+        rm -f "$expected_service"
+        print_warning "Dotfiles auto-update templates not found; skipping"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
+        print_debug "[DRY RUN] Would enable dotfiles-auto-update.timer"
+        rm -f "$expected_service"
+        return 0
+    fi
+
+    sed \
+        -e "s|__DOTFILES_DIR__|$DOTFILES_DIR|g" \
+        -e "s|__DOTFILES_REMOTE__|$DOTFILES_AUTO_UPDATE_REMOTE|g" \
+        -e "s|__DOTFILES_BRANCH__|$DOTFILES_AUTO_UPDATE_BRANCH|g" \
+        "$service_src" > "$expected_service"
+
+    if [ -f "$service_dst" ] && [ -f "$timer_dst" ] && cmp -s "$expected_service" "$service_dst" && cmp -s "$timer_src" "$timer_dst" && systemctl --user is-enabled dotfiles-auto-update.timer >/dev/null 2>&1 && [[ "$FORCE_INSTALL" != "true" ]]; then
+        rm -f "$expected_service"
+        print_status "dotfiles-auto-update.timer is already configured"
+        return 0
+    fi
+
+    mkdir -p "$user_systemd_dir"
+    cp "$expected_service" "$service_dst"
+    cp "$timer_src" "$timer_dst"
+    rm -f "$expected_service"
+
+    if ! systemctl --user daemon-reload; then
+        print_warning "systemctl --user daemon-reload failed"
+        return 1
+    fi
+    if ! systemctl --user enable --now dotfiles-auto-update.timer; then
+        print_warning "Failed to enable dotfiles-auto-update.timer"
+        return 1
+    fi
+
+    print_status "Installed and enabled dotfiles-auto-update.timer"
 }
 
 install_codex_omx_sync_stack() {

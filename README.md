@@ -28,7 +28,7 @@ Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 3. Shell environment setup
 4. Development tools installation
 5. System tools installation
-6. Final configuration (symlinks, optional Claude config, optional Codex/OMX sync stack, default shell)
+6. Final configuration (symlinks, optional Claude config, Codex/OMX sync, dotfiles auto-update, default shell)
 
 ## Managed Dotfiles
 
@@ -41,11 +41,11 @@ The installer symlinks these files to `$HOME`:
 - `aliases.sh`
 - `.gitconfig`
 
-## Codex/OMX Sync Stack (Optional)
+## Codex/OMX Sync Stack
 
-If enabled during install, it sets up:
+During install, it sets up:
 
-- `codex-sync`, `omx-sync` launchers in `~/.local/bin/`
+- `codex-sync`, `omx-sync`, `dotfiles-sync` launchers in `~/.local/bin/`
 - `agentic-skill-updater.timer` (user systemd, hourly)
 - Codex CLI / oh-my-codex install attempts
 
@@ -63,6 +63,23 @@ Environment variables:
 - `SKILL_SYNC_CANARY_PERCENT`
 - `SKILL_SYNC_INSTALL_ROOT`
 - `SKILL_SYNC_SKILL_NAME`
+
+## Dotfiles Auto-Update
+
+During install, it also sets up:
+
+- `dotfiles-auto-update.timer` (user systemd, hourly)
+- `dotfiles-auto-update.service` using `bin/dotfiles-sync`
+
+Behavior:
+
+- Runs `git pull --ff-only` on your dotfiles repo
+- Auto-skips update when the repo has local staged/unstaged/untracked changes
+
+Environment variables:
+
+- `DOTFILES_AUTO_UPDATE_REMOTE` (default: `origin`)
+- `DOTFILES_AUTO_UPDATE_BRANCH` (default: `main`)
 
 ## Post-Install
 
@@ -92,3 +109,4 @@ git config --global user.email "you@example.com"
 - Prompt font rendering: install a Nerd Font
 - Installer permissions: `chmod +x install.sh`
 - Skip Codex/OMX sync stack: `./install.sh --skip-codex-sync`
+- Skip dotfiles auto-update timer: `./install.sh --skip-dotfiles-autoupdate`

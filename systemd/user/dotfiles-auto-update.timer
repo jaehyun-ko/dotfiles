@@ -1,0 +1,10 @@
+[Unit]
+Description=Run Dotfiles Auto Updater hourly
+
+[Timer]
+OnBootSec=7m
+OnUnitActiveSec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
