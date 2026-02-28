@@ -753,14 +753,14 @@ is_codex_skill_sync_timer_ready() {
         "__SKILL_NAME__=$SKILL_SYNC_SKILL_NAME"
 }
 
-is_codex_omx_sync_stack_ready() {
-    if ! command_exists codex || ! command_exists omx; then
+is_codex_omo_sync_stack_ready() {
+    if ! command_exists codex || ! command_exists oh-my-opencode; then
         return 1
     fi
     if ! is_codex_sync_launcher_installed "codex-sync"; then
         return 1
     fi
-    if ! is_codex_sync_launcher_installed "omx-sync"; then
+    if ! is_codex_sync_launcher_installed "omo-sync"; then
         return 1
     fi
     if ! is_codex_sync_launcher_installed "dotfiles-sync"; then
@@ -825,28 +825,28 @@ install_codex_cli() {
     print_status "Codex CLI installed"
 }
 
-install_oh_my_codex_cli() {
-    if command_exists omx && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "oh-my-codex is already installed"
+install_oh_my_opencode_cli() {
+    if command_exists oh-my-opencode && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "oh-my-opencode is already installed"
         return 0
     fi
 
-    print_info "Installing oh-my-codex..."
+    print_info "Installing oh-my-opencode..."
     if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would install oh-my-codex"
+        print_debug "[DRY RUN] Would install oh-my-opencode"
         return 0
     fi
 
-    run_npm_global_install "oh-my-codex" || {
-        print_warning "Failed to install oh-my-codex"
+    run_npm_global_install "oh-my-opencode" || {
+        print_warning "Failed to install oh-my-opencode"
         return 1
     }
-    print_status "oh-my-codex installed"
+    print_status "oh-my-opencode installed"
 }
 
 install_codex_sync_launchers() {
-    print_info "Installing codex/omx sync launchers..."
-    local launchers=("codex-sync" "omx-sync" "dotfiles-sync")
+    print_info "Installing codex/omo sync launchers..."
+    local launchers=("codex-sync" "omo-sync" "omx-sync" "dotfiles-sync")
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then
@@ -930,15 +930,15 @@ install_dotfiles_auto_update_timer() {
         "__DOTFILES_BRANCH__=$DOTFILES_AUTO_UPDATE_BRANCH"
 }
 
-install_codex_omx_sync_stack() {
-    if is_codex_omx_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Codex/OMX sync stack is already configured"
+install_codex_omo_sync_stack() {
+    if is_codex_omo_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Codex/OmO sync stack is already configured"
         return 0
     fi
-    print_info "Installing Codex/OMX sync stack..."
+    print_info "Installing Codex/OmO sync stack..."
     install_codex_cli || print_warning "Codex CLI install step had issues"
-    install_oh_my_codex_cli || print_warning "oh-my-codex install step had issues"
+    install_oh_my_opencode_cli || print_warning "oh-my-opencode install step had issues"
     install_codex_sync_launchers || print_warning "launcher installation had issues"
     install_codex_skill_sync_timer || print_warning "timer installation had issues"
-    print_status "Codex/OMX sync stack setup completed"
+    print_status "Codex/OmO sync stack setup completed"
 }

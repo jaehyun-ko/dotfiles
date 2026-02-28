@@ -82,10 +82,10 @@ export SKIP_MIRROR_CHANGE="${SKIP_MIRROR_CHANGE:-false}"  # Skip APT mirror conf
 export AUTO_MIRROR="${AUTO_MIRROR:-false}"  # Automatically select best mirror without prompting
 export FASTEST_MIRROR="${FASTEST_MIRROR:-false}"  # Test and use fastest mirror (takes time)
 export MIRROR_LOCATION="${MIRROR_LOCATION:-}"  # Force specific mirror location (kr, jp, cn, us)
-export SKIP_CODEX_SYNC_STACK="${SKIP_CODEX_SYNC_STACK:-false}"  # Skip codex/omx sync setup
+export SKIP_CODEX_SYNC_STACK="${SKIP_CODEX_SYNC_STACK:-false}"  # Skip codex/omo sync setup
 export SKIP_DOTFILES_AUTO_UPDATE="${SKIP_DOTFILES_AUTO_UPDATE:-false}"  # Skip dotfiles auto update timer
 
-# Codex/OMX + skill sync defaults
+# Codex/OmO + skill sync defaults
 export AGENTIC_RESEARCHER_REPO="${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
 export SKILL_SYNC_CHANNEL="${SKILL_SYNC_CHANNEL:-stable}"
 export SKILL_SYNC_CANARY_PERCENT="${SKILL_SYNC_CANARY_PERCENT:-10}"

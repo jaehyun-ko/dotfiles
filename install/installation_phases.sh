@@ -214,14 +214,14 @@ phase6_configuration() {
         print_info "Skipping Claude Code configuration"
     fi
 
-    # 6.3 Codex/OMX sync stack
+    # 6.3 Codex/OmO sync stack
     echo
     if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
-        print_info "Skipping Codex/OMX sync stack (--skip-codex-sync)"
-    elif is_codex_omx_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Codex/OMX sync stack already configured (auto-skip)"
+        print_info "Skipping Codex/OmO sync stack (--skip-codex-sync)"
+    elif is_codex_omo_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "Codex/OmO sync stack already configured (auto-skip)"
     else
-        install_codex_omx_sync_stack || print_warning "Codex/OMX sync stack had issues"
+        install_codex_omo_sync_stack || print_warning "Codex/OmO sync stack had issues"
     fi
 
     # 6.4 Dotfiles auto-update timer
@@ -405,18 +405,18 @@ validate_installation() {
         checks+=("⚠️  Codex CLI")
     fi
 
-    if command_exists omx; then
-        checks+=("✅ oh-my-codex")
+    if command_exists oh-my-opencode; then
+        checks+=("✅ oh-my-opencode")
     else
-        checks+=("⚠️  oh-my-codex")
+        checks+=("⚠️  oh-my-opencode")
     fi
 
-    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omx-sync" ]; then
-        checks+=("✅ codex/omx sync launchers")
-    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omx-sync" ]; then
-        checks+=("⚠️  codex/omx sync launchers (partial)")
+    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ]; then
+        checks+=("✅ codex/omo sync launchers")
+    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ]; then
+        checks+=("⚠️  codex/omo sync launchers (partial)")
     else
-        checks+=("⚠️  codex/omx sync launchers")
+        checks+=("⚠️  codex/omo sync launchers")
     fi
 
     if is_dotfiles_auto_update_timer_ready; then

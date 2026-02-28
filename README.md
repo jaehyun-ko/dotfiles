@@ -28,7 +28,7 @@ Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 3. Shell environment setup
 4. Development tools installation
 5. System tools installation
-6. Final configuration (symlinks, optional Claude config, Codex/OMX sync, dotfiles auto-update, default shell)
+6. Final configuration (symlinks, optional Claude config, Codex/OmO sync, dotfiles auto-update, default shell)
 
 ## Managed Dotfiles
 
@@ -41,18 +41,19 @@ The installer symlinks these files to `$HOME`:
 - `aliases.sh`
 - `.gitconfig`
 
-## Codex/OMX Sync Stack
+## Codex/OmO Sync Stack
 
 During install, it sets up:
 
-- `codex-sync`, `omx-sync`, `dotfiles-sync` launchers in `~/.local/bin/`
+- `codex-sync`, `omo-sync`, `dotfiles-sync` launchers in `~/.local/bin/`
 - `agentic-skill-updater.timer` (user systemd, hourly)
-- Codex CLI / oh-my-codex install attempts
+- Codex CLI / oh-my-opencode install attempts
 
 Behavior:
 
-- Runs `agentic-researcher` skill sync before launching `codex`/`omx`
+- Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
 - Skips frequent checks when within interval (default 15 min)
+- Legacy compatibility: `omx-sync` is kept as an alias to `omo-sync`
 
 Environment variables:
 
@@ -108,5 +109,5 @@ git config --global user.email "you@example.com"
 - Default shell: `chsh -s "$(which zsh)"`
 - Prompt font rendering: install a Nerd Font
 - Installer permissions: `chmod +x install.sh`
-- Skip Codex/OMX sync stack: `./install.sh --skip-codex-sync`
+- Skip Codex/OmO sync stack: `./install.sh --skip-codex-sync`
 - Skip dotfiles auto-update timer: `./install.sh --skip-dotfiles-autoupdate`

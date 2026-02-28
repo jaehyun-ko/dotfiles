@@ -1,32 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-AGENTIC_RESEARCHER_REPO="${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
-SKILL_SYNC_CHANNEL="${SKILL_SYNC_CHANNEL:-stable}"
-SKILL_SYNC_CANARY_PERCENT="${SKILL_SYNC_CANARY_PERCENT:-10}"
-SKILL_SYNC_INSTALL_ROOT="${SKILL_SYNC_INSTALL_ROOT:-$HOME/.codex/skills}"
-SKILL_SYNC_SKILL_NAME="${SKILL_SYNC_SKILL_NAME:-agentic-researcher}"
-SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES="${SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES:-15}"
-OMX_BIN="${OMX_BIN:-omx}"
-
-sync_script="$AGENTIC_RESEARCHER_REPO/scripts/skill_autoupdate.py"
-
-if command -v uv >/dev/null 2>&1 && [ -f "$sync_script" ]; then
-  sync_cmd=(
-    uv run python "$sync_script"
-    --repo-dir "$AGENTIC_RESEARCHER_REPO"
-    --skill-name "$SKILL_SYNC_SKILL_NAME"
-    --channel "$SKILL_SYNC_CHANNEL"
-    --canary-percent "$SKILL_SYNC_CANARY_PERCENT"
-    --install-root "$SKILL_SYNC_INSTALL_ROOT"
-    --min-check-interval-minutes "$SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES"
-  )
-  if [[ "${SKILL_SYNC_NO_PULL:-0}" == "1" ]]; then
-    sync_cmd+=(--no-pull)
-  fi
-  if ! "${sync_cmd[@]}"; then
-    echo "[warn] skill sync failed; continuing launch." >&2
-  fi
+# Backward-compatible alias for previous launcher name.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -n "${OMX_BIN:-}" && -z "${OMO_BIN:-}" ]]; then
+  export OMO_BIN="$OMX_BIN"
 fi
 
-exec "$OMX_BIN" "$@"
+exec "$SCRIPT_DIR/omo-sync" "$@"

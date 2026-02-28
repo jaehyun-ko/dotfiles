@@ -93,7 +93,7 @@ Options:
 
 Mirror Options:
     --skip-mirror          Skip APT mirror configuration (Ubuntu/Debian)
-    --skip-codex-sync      Skip Codex/OMX sync wrapper + timer setup
+    --skip-codex-sync      Skip Codex/OmO sync wrapper + timer setup
     --skip-dotfiles-autoupdate  Skip dotfiles repository auto-update timer setup
     --skip-pip-mirror      Skip pip mirror configuration
     --auto-mirror          Automatically select best mirror (no prompts)
@@ -119,7 +119,7 @@ Examples:
     # Skip mirror change (use current sources)
     $0 --skip-mirror
 
-    # Skip Codex/OMX sync stack installation
+    # Skip Codex/OmO sync stack installation
     $0 --skip-codex-sync
 
     # Skip dotfiles auto-update timer installation
@@ -195,7 +195,7 @@ main() {
     print_info "  Phase 1: System Preparation (APT mirror, package manager update)"
     print_info "  Phase 2: Core Packages (basic, development, optional)"
     print_info "  Phase 3-5: Parallel Installation (shell, dev tools, system tools)"
-    print_info "  Phase 6: Configuration (symlinks, Claude config, Codex/OMX sync, dotfiles auto-update, shell setup)"
+    print_info "  Phase 6: Configuration (symlinks, Claude config, Codex/OmO sync, dotfiles auto-update, shell setup)"
     echo
     
     if ! confirm "Proceed with installation?"; then
