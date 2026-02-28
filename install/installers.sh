@@ -846,7 +846,7 @@ install_oh_my_opencode_cli() {
 
 install_codex_sync_launchers() {
     print_info "Installing codex/omo sync launchers..."
-    local launchers=("codex-sync" "omo-sync" "omx-sync" "dotfiles-sync")
+    local launchers=("codex-sync" "omo-sync" "dotfiles-sync")
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then

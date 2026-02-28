@@ -53,7 +53,6 @@ Behavior:
 
 - Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
 - Skips frequent checks when within interval (default 15 min)
-- Legacy compatibility: `omx-sync` is kept as an alias to `omo-sync`
 
 Environment variables:
 
