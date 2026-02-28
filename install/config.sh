@@ -46,7 +46,7 @@ export OPTIONAL_PACKAGES=(
 export URLS=(
     "OH_MY_ZSH|https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh"
     "OH_MY_BASH|https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh"
-    "NVM|https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh"
+    "NVM|https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh"
     "RUSTUP|https://sh.rustup.rs"
     "UV|https://astral.sh/uv/install.sh"
     "POWERLEVEL10K|https://github.com/romkatv/powerlevel10k.git"
@@ -64,6 +64,8 @@ export DOTFILES_TO_LINK=(
     ".bashrc"
     ".tmux.conf.local"
     ".p10k.zsh"
+    "aliases.sh"
+    ".gitconfig"
 )
 
 # Installation options

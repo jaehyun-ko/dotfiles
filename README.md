@@ -1,60 +1,94 @@
 # Dotfiles
 
-개인 설정 파일 및 자동 설치 스크립트
+Personal shell/dev environment dotfiles with a modular 6-phase installer.
 
-## 설치
+## What Is Included
+
+- `zsh`: oh-my-zsh + powerlevel10k + shared aliases + lazy nvm loading
+- `bash`: oh-my-bash + shared aliases + lazy nvm loading
+- `tmux`: oh-my-tmux local configuration
+- `git`: template `.gitconfig` with practical defaults
+- `claude/`: Claude Code setup (`CLAUDE.md`, `ML-STACK.md`, `rules/`, `settings.json`)
+- `install/`: reusable installer modules and phase orchestration
+
+## Quick Start
 
 ```bash
 git clone https://github.com/jaehyun-ko/dotfiles.git ~/dotfiles
-cd ~/dotfiles && ./install.sh
+cd ~/dotfiles
+./install.sh
 ```
 
-OS 자동 감지 (Ubuntu/Debian, RedHat/CentOS, Arch, macOS)
+Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 
-## 포함 항목
+## Installer Phases
 
-| 설정 | 프레임워크 |
-|------|-----------|
-| zsh | oh-my-zsh + powerlevel10k |
-| bash | oh-my-bash |
-| tmux | oh-my-tmux |
-| git | gitconfig |
+1. System preparation
+2. Core package installation
+3. Shell environment setup
+4. Development tools installation
+5. System tools installation
+6. Final configuration (symlinks, optional Claude config, optional Codex/OMX sync stack, default shell)
 
-**자동 설치:** zsh, bash, tmux, git, nvm, autojump, cargo/rust, curl, wget
+## Managed Dotfiles
 
-## Codex/OMX Sync Stack (선택)
+The installer symlinks these files to `$HOME`:
 
-설치 중 선택하면 아래가 함께 설정됩니다.
+- `.zshrc`
+- `.bashrc`
+- `.tmux.conf.local`
+- `.p10k.zsh`
+- `aliases.sh`
+- `.gitconfig`
 
-- `codex-sync`, `omx-sync` 런처 (`~/.local/bin/`)
-- `agentic-skill-updater.timer` (user systemd, 1시간 주기)
-- Codex CLI / oh-my-codex 자동 설치 시도
+## Codex/OMX Sync Stack (Optional)
 
-기본 동작:
+If enabled during install, it sets up:
 
-- 실행 시 `agentic-researcher` 스킬 동기화 체크 후 `codex`/`omx` 실행
-- 최근 체크가 너무 최근이면 자동 스킵 (기본 15분)
+- `codex-sync`, `omx-sync` launchers in `~/.local/bin/`
+- `agentic-skill-updater.timer` (user systemd, hourly)
+- Codex CLI / oh-my-codex install attempts
 
-환경변수:
+Behavior:
 
-- `AGENTIC_RESEARCHER_REPO` (기본: `~/projects/agentic-researcher`)
-- `SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES` (기본: `15`)
-- `SKILL_SYNC_NO_PULL=1` (실행 시 `git pull` 생략)
+- Runs `agentic-researcher` skill sync before launching `codex`/`omx`
+- Skips frequent checks when within interval (default 15 min)
+
+Environment variables:
+
+- `AGENTIC_RESEARCHER_REPO` (default: `~/projects/agentic-researcher`)
+- `SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES` (default: `15`)
+- `SKILL_SYNC_NO_PULL=1` (skip `git pull` in launch-time sync)
 - `SKILL_SYNC_CHANNEL` (`stable`/`canary`)
 - `SKILL_SYNC_CANARY_PERCENT`
 - `SKILL_SYNC_INSTALL_ROOT`
 - `SKILL_SYNC_SKILL_NAME`
 
-## 설치 후
+## Post-Install
 
 ```bash
-source ~/.zshrc  # 또는 터미널 재시작
-p10k configure   # powerlevel10k 재설정 (선택)
+source ~/.zshrc
+# Optional prompt setup refresh
+p10k configure
 ```
 
-## 문제 해결
+Update identity placeholders in `~/.gitconfig`:
 
-- **기본 셸 변경:** `chsh -s $(which zsh)`
-- **폰트 깨짐:** [Nerd Fonts](https://www.nerdfonts.com/) 설치
-- **권한 오류:** `chmod +x install.sh`
-- **Codex/OMX sync만 건너뛰기:** `./install.sh --skip-codex-sync`
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+```
+
+## Customization
+
+1. Edit shared aliases in `aliases.sh`.
+2. Edit package/tool URL lists in `install/config.sh`.
+3. Adjust shell plugins directly in `.zshrc` or `.bashrc`.
+4. Customize Claude Code rules under `claude/rules/`.
+
+## Troubleshooting
+
+- Default shell: `chsh -s "$(which zsh)"`
+- Prompt font rendering: install a Nerd Font
+- Installer permissions: `chmod +x install.sh`
+- Skip Codex/OMX sync stack: `./install.sh --skip-codex-sync`

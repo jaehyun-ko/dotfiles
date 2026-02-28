@@ -1,0 +1,44 @@
+# Global Git configuration template for this dotfiles repo.
+# Update user.name and user.email after first install.
+
+[user]
+    name = Your Name
+    email = you@example.com
+
+[core]
+    editor = vim
+    autocrlf = input
+    pager = less -FRX
+
+[init]
+    defaultBranch = main
+
+[pull]
+    rebase = false
+
+[rebase]
+    autoStash = true
+
+[fetch]
+    prune = true
+
+[push]
+    autoSetupRemote = true
+
+[merge]
+    conflictStyle = zdiff3
+
+[rerere]
+    enabled = true
+
+[color]
+    ui = auto
+
+[alias]
+    st = status -sb
+    co = checkout
+    br = branch
+    cm = commit
+    amend = commit --amend
+    last = log -1 --stat
+    lg = log --graph --decorate --oneline --all

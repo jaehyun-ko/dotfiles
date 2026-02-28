@@ -1,10 +1,19 @@
-# Backup files
+# Editor and backup files
 *.backup
 *~
 *.swp
 *.swo
+*.tmp
+*.temp
+*.orig
 
-# OS specific files
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# OS files
 .DS_Store
 Thumbs.db
 
@@ -12,12 +21,36 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Temporary files
-*.tmp
-*.temp
-
-# Personal data
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.python-version
+.node-version
 .git-credentials
 .netrc
 .ssh/
 .gnupg/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node.js
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.next/
+dist/
+coverage/
+
+# Rust
+target/
