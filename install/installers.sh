@@ -623,32 +623,134 @@ is_codex_sync_launcher_installed() {
     return 1
 }
 
+systemd_user_dir() {
+    echo "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
+}
+
+render_systemd_template() {
+    local src="$1"
+    local out="$2"
+    shift 2
+
+    local sed_args=()
+    local pair
+    for pair in "$@"; do
+        local key="${pair%%=*}"
+        local value="${pair#*=}"
+        sed_args+=(-e "s|$key|$value|g")
+    done
+    sed "${sed_args[@]}" "$src" > "$out"
+}
+
+is_user_timer_ready() {
+    local unit_name="$1"
+    local service_src="$2"
+    local timer_src="$3"
+    local service_dst="$4"
+    local timer_dst="$5"
+    shift 5
+
+    local expected_service
+    expected_service="$(mktemp)"
+
+    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ] || [ ! -f "$service_dst" ] || [ ! -f "$timer_dst" ]; then
+        rm -f "$expected_service"
+        return 1
+    fi
+
+    render_systemd_template "$service_src" "$expected_service" "$@"
+
+    if ! cmp -s "$expected_service" "$service_dst"; then
+        rm -f "$expected_service"
+        return 1
+    fi
+    if ! cmp -s "$timer_src" "$timer_dst"; then
+        rm -f "$expected_service"
+        return 1
+    fi
+    rm -f "$expected_service"
+
+    if ! systemctl --user is-enabled "$unit_name" >/dev/null 2>&1; then
+        return 1
+    fi
+
+    return 0
+}
+
+install_user_timer() {
+    local unit_name="$1"
+    local service_src="$2"
+    local timer_src="$3"
+    local service_dst="$4"
+    local timer_dst="$5"
+    shift 5
+
+    local expected_service
+    expected_service="$(mktemp)"
+
+    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ]; then
+        rm -f "$expected_service"
+        print_warning "Timer templates not found for $unit_name; skipping"
+        return 0
+    fi
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
+        print_debug "[DRY RUN] Would enable $unit_name"
+        rm -f "$expected_service"
+        return 0
+    fi
+
+    render_systemd_template "$service_src" "$expected_service" "$@"
+
+    if [ -f "$service_dst" ] && [ -f "$timer_dst" ] && cmp -s "$expected_service" "$service_dst" && cmp -s "$timer_src" "$timer_dst" && systemctl --user is-enabled "$unit_name" >/dev/null 2>&1 && [[ "$FORCE_INSTALL" != "true" ]]; then
+        rm -f "$expected_service"
+        print_status "$unit_name is already configured"
+        return 0
+    fi
+
+    mkdir -p "$(dirname "$service_dst")"
+    cp "$expected_service" "$service_dst"
+    cp "$timer_src" "$timer_dst"
+    rm -f "$expected_service"
+
+    if ! systemctl --user daemon-reload; then
+        print_warning "systemctl --user daemon-reload failed"
+        return 1
+    fi
+    if ! systemctl --user enable --now "$unit_name"; then
+        print_warning "Failed to enable $unit_name"
+        return 1
+    fi
+
+    print_status "Installed and enabled $unit_name"
+}
+
 is_codex_skill_sync_timer_ready() {
     if ! command_exists systemctl; then
         return 1
     fi
 
-    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-    local service_dst="$user_systemd_dir/agentic-skill-updater.service"
-    local timer_dst="$user_systemd_dir/agentic-skill-updater.timer"
     local repo_path
     repo_path="$(resolve_agentic_researcher_repo 2>/dev/null || true)"
 
-    if [ -z "$repo_path" ] || [ ! -f "$service_dst" ] || [ ! -f "$timer_dst" ]; then
+    if [ -z "$repo_path" ]; then
         return 1
     fi
 
-    if ! grep -Fq "$repo_path" "$service_dst"; then
-        return 1
-    fi
-    if ! grep -Fq "$SKILL_SYNC_SKILL_NAME" "$service_dst"; then
-        return 1
-    fi
-    if ! systemctl --user is-enabled agentic-skill-updater.timer >/dev/null 2>&1; then
-        return 1
-    fi
-
-    return 0
+    local user_dir
+    user_dir="$(systemd_user_dir)"
+    is_user_timer_ready \
+        "agentic-skill-updater.timer" \
+        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.service" \
+        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer" \
+        "$user_dir/agentic-skill-updater.service" \
+        "$user_dir/agentic-skill-updater.timer" \
+        "__REPO_DIR__=$repo_path" \
+        "__CHANNEL__=$SKILL_SYNC_CHANNEL" \
+        "__CANARY_PERCENT__=$SKILL_SYNC_CANARY_PERCENT" \
+        "__INSTALL_ROOT__=$SKILL_SYNC_INSTALL_ROOT" \
+        "__SKILL_NAME__=$SKILL_SYNC_SKILL_NAME"
 }
 
 is_codex_omx_sync_stack_ready() {
@@ -675,40 +777,17 @@ is_dotfiles_auto_update_timer_ready() {
         return 1
     fi
 
-    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-    local service_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service"
-    local timer_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer"
-    local service_dst="$user_systemd_dir/dotfiles-auto-update.service"
-    local timer_dst="$user_systemd_dir/dotfiles-auto-update.timer"
-    local expected_service
-    expected_service="$(mktemp)"
-
-    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ] || [ ! -f "$service_dst" ] || [ ! -f "$timer_dst" ]; then
-        rm -f "$expected_service"
-        return 1
-    fi
-
-    sed \
-        -e "s|__DOTFILES_DIR__|$DOTFILES_DIR|g" \
-        -e "s|__DOTFILES_REMOTE__|$DOTFILES_AUTO_UPDATE_REMOTE|g" \
-        -e "s|__DOTFILES_BRANCH__|$DOTFILES_AUTO_UPDATE_BRANCH|g" \
-        "$service_src" > "$expected_service"
-
-    if ! cmp -s "$expected_service" "$service_dst"; then
-        rm -f "$expected_service"
-        return 1
-    fi
-    if ! cmp -s "$timer_src" "$timer_dst"; then
-        rm -f "$expected_service"
-        return 1
-    fi
-    rm -f "$expected_service"
-
-    if ! systemctl --user is-enabled dotfiles-auto-update.timer >/dev/null 2>&1; then
-        return 1
-    fi
-
-    return 0
+    local user_dir
+    user_dir="$(systemd_user_dir)"
+    is_user_timer_ready \
+        "dotfiles-auto-update.timer" \
+        "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service" \
+        "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer" \
+        "$user_dir/dotfiles-auto-update.service" \
+        "$user_dir/dotfiles-auto-update.timer" \
+        "__DOTFILES_DIR__=$DOTFILES_DIR" \
+        "__DOTFILES_REMOTE__=$DOTFILES_AUTO_UPDATE_REMOTE" \
+        "__DOTFILES_BRANCH__=$DOTFILES_AUTO_UPDATE_BRANCH"
 }
 
 run_npm_global_install() {
@@ -815,50 +894,19 @@ install_codex_skill_sync_timer() {
         return 0
     fi
 
-    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-    local service_src="$DOTFILES_DIR/systemd/user/agentic-skill-updater.service"
-    local timer_src="$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer"
-    local service_dst="$user_systemd_dir/agentic-skill-updater.service"
-    local timer_dst="$user_systemd_dir/agentic-skill-updater.timer"
-    local expected_service
-    expected_service="$(mktemp)"
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
-        print_debug "[DRY RUN] Would enable agentic-skill-updater.timer"
-        rm -f "$expected_service"
-        return 0
-    fi
-
-    sed \
-        -e "s|__REPO_DIR__|$repo_path|g" \
-        -e "s|__CHANNEL__|$SKILL_SYNC_CHANNEL|g" \
-        -e "s|__CANARY_PERCENT__|$SKILL_SYNC_CANARY_PERCENT|g" \
-        -e "s|__INSTALL_ROOT__|$SKILL_SYNC_INSTALL_ROOT|g" \
-        -e "s|__SKILL_NAME__|$SKILL_SYNC_SKILL_NAME|g" \
-        "$service_src" > "$expected_service"
-
-    if [ -f "$service_dst" ] && [ -f "$timer_dst" ] && cmp -s "$expected_service" "$service_dst" && cmp -s "$timer_src" "$timer_dst" && systemctl --user is-enabled agentic-skill-updater.timer >/dev/null 2>&1 && [[ "$FORCE_INSTALL" != "true" ]]; then
-        rm -f "$expected_service"
-        print_status "agentic-skill-updater.timer is already configured"
-        return 0
-    fi
-
-    mkdir -p "$user_systemd_dir"
-    cp "$expected_service" "$service_dst"
-    cp "$timer_src" "$timer_dst"
-    rm -f "$expected_service"
-
-    if ! systemctl --user daemon-reload; then
-        print_warning "systemctl --user daemon-reload failed"
-        return 1
-    fi
-    if ! systemctl --user enable --now agentic-skill-updater.timer; then
-        print_warning "Failed to enable agentic-skill-updater.timer"
-        return 1
-    fi
-
-    print_status "Installed and enabled agentic-skill-updater.timer"
+    local user_dir
+    user_dir="$(systemd_user_dir)"
+    install_user_timer \
+        "agentic-skill-updater.timer" \
+        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.service" \
+        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer" \
+        "$user_dir/agentic-skill-updater.service" \
+        "$user_dir/agentic-skill-updater.timer" \
+        "__REPO_DIR__=$repo_path" \
+        "__CHANNEL__=$SKILL_SYNC_CHANNEL" \
+        "__CANARY_PERCENT__=$SKILL_SYNC_CANARY_PERCENT" \
+        "__INSTALL_ROOT__=$SKILL_SYNC_INSTALL_ROOT" \
+        "__SKILL_NAME__=$SKILL_SYNC_SKILL_NAME"
 }
 
 install_dotfiles_auto_update_timer() {
@@ -869,54 +917,17 @@ install_dotfiles_auto_update_timer() {
         return 0
     fi
 
-    local user_systemd_dir="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
-    local service_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service"
-    local timer_src="$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer"
-    local service_dst="$user_systemd_dir/dotfiles-auto-update.service"
-    local timer_dst="$user_systemd_dir/dotfiles-auto-update.timer"
-    local expected_service
-    expected_service="$(mktemp)"
-
-    if [ ! -f "$service_src" ] || [ ! -f "$timer_src" ]; then
-        rm -f "$expected_service"
-        print_warning "Dotfiles auto-update templates not found; skipping"
-        return 0
-    fi
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would write $service_dst and $timer_dst"
-        print_debug "[DRY RUN] Would enable dotfiles-auto-update.timer"
-        rm -f "$expected_service"
-        return 0
-    fi
-
-    sed \
-        -e "s|__DOTFILES_DIR__|$DOTFILES_DIR|g" \
-        -e "s|__DOTFILES_REMOTE__|$DOTFILES_AUTO_UPDATE_REMOTE|g" \
-        -e "s|__DOTFILES_BRANCH__|$DOTFILES_AUTO_UPDATE_BRANCH|g" \
-        "$service_src" > "$expected_service"
-
-    if [ -f "$service_dst" ] && [ -f "$timer_dst" ] && cmp -s "$expected_service" "$service_dst" && cmp -s "$timer_src" "$timer_dst" && systemctl --user is-enabled dotfiles-auto-update.timer >/dev/null 2>&1 && [[ "$FORCE_INSTALL" != "true" ]]; then
-        rm -f "$expected_service"
-        print_status "dotfiles-auto-update.timer is already configured"
-        return 0
-    fi
-
-    mkdir -p "$user_systemd_dir"
-    cp "$expected_service" "$service_dst"
-    cp "$timer_src" "$timer_dst"
-    rm -f "$expected_service"
-
-    if ! systemctl --user daemon-reload; then
-        print_warning "systemctl --user daemon-reload failed"
-        return 1
-    fi
-    if ! systemctl --user enable --now dotfiles-auto-update.timer; then
-        print_warning "Failed to enable dotfiles-auto-update.timer"
-        return 1
-    fi
-
-    print_status "Installed and enabled dotfiles-auto-update.timer"
+    local user_dir
+    user_dir="$(systemd_user_dir)"
+    install_user_timer \
+        "dotfiles-auto-update.timer" \
+        "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.service" \
+        "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer" \
+        "$user_dir/dotfiles-auto-update.service" \
+        "$user_dir/dotfiles-auto-update.timer" \
+        "__DOTFILES_DIR__=$DOTFILES_DIR" \
+        "__DOTFILES_REMOTE__=$DOTFILES_AUTO_UPDATE_REMOTE" \
+        "__DOTFILES_BRANCH__=$DOTFILES_AUTO_UPDATE_BRANCH"
 }
 
 install_codex_omx_sync_stack() {
