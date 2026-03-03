@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_dir)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_shim.sh"
+
+self_real="$(df_realpath "${BASH_SOURCE[0]}")"
+df_exec_node_global_cmd "oh-my-opencode" "$self_real" "$@"
+

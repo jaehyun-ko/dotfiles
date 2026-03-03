@@ -796,6 +796,11 @@ install_user_timer() {
     cp "$timer_src" "$timer_dst"
     rm -f "$expected_service"
 
+    # Best-effort: allow user timers to run even when logged out (server-friendly).
+    if command_exists loginctl; then
+        loginctl enable-linger "$USER" >/dev/null 2>&1 || true
+    fi
+
     if ! systemctl --user daemon-reload; then
         print_warning "systemctl --user daemon-reload failed"
         return 1
@@ -995,7 +1000,25 @@ install_oh_my_opencode_cli() {
 
 install_codex_sync_launchers() {
     print_info "Installing codex/omo sync launchers..."
-    local launchers=("codex-sync" "omo-sync" "dotfiles-sync" "codex-config-sync" "omx-config-sync" "opencode-config-sync" "codex-plan" "codex-code" "opencode")
+    local launchers=(
+        # Node CLIs (NVM-aware wrappers for non-interactive shells)
+        "codex"
+        "omx"
+        "oh-my-opencode"
+
+        # Repo launchers / sync tools
+        "codex-sync"
+        "omo-sync"
+        "dotfiles-sync"
+        "dotfiles-post-sync"
+        "dotfiles-systemd-sync"
+        "codex-config-sync"
+        "omx-config-sync"
+        "opencode-config-sync"
+        "codex-plan"
+        "codex-code"
+        "opencode"
+    )
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then

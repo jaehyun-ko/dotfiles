@@ -48,7 +48,8 @@ The installer symlinks these files to `$HOME`:
 
 During install, it sets up:
 
-- `codex-sync`, `omo-sync`, `dotfiles-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode` launchers in `~/.local/bin/`
+- NVM-aware CLI shims in `~/.local/bin/`: `codex`, `omx`, `oh-my-opencode`
+- Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
 - `agentic-skill-updater.timer` (user systemd, hourly)
 - Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
 - Symlinked OpenCode config files from repo to `~/.config/opencode/`
@@ -101,7 +102,11 @@ Behavior:
 - Legacy flag-only interface (`dotfiles-sync --servers ...`) is removed
 - Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
 - Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
-- Runs `opencode-config-sync --force && codex-config-sync && omx-config-sync` after sync
+- Runs `dotfiles-post-sync` after sync:
+  - `opencode-config-sync --force`
+  - `codex-config-sync`
+  - `omx-config-sync`
+  - `dotfiles-systemd-sync` (keeps user timers up to date + enables linger best-effort)
 - If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`
 - Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails
 
@@ -112,7 +117,7 @@ Environment variables:
 - `DOTFILES_SYNC_CONTROLLER` (default: `false`)
 - `DOTFILES_SYNC_SSH_USER`, `DOTFILES_SYNC_SSH_PORT`, `DOTFILES_SYNC_SSH_IDENTITY` (keep in local env file, not in git)
 - `DOTFILES_SERVER_ID` (optional; fallback: `hostname -s`)
-- `DOTFILES_SYNC_POST_CMD` (optional override; default runs repo scripts: `"<repo>/bin/opencode-config-sync" --force && "<repo>/bin/codex-config-sync" && "<repo>/bin/omx-config-sync"`)
+- `DOTFILES_SYNC_POST_CMD` (optional override; default: `"<repo>/bin/dotfiles-post-sync"`)
 
 Recommended setup for multi-server:
 

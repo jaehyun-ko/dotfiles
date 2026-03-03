@@ -110,7 +110,7 @@ get_post_cmd() {
   fi
 
   local repo="${DOTFILES_REPO:-$DEFAULT_REPO}"
-  printf '%s' "\"$repo/bin/opencode-config-sync\" --force && \"$repo/bin/codex-config-sync\" && \"$repo/bin/omx-config-sync\""
+  printf '%s' "\"$repo/bin/dotfiles-post-sync\""
 }
 
 get_retry_max() {

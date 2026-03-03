@@ -2,14 +2,37 @@
 set -euo pipefail
 
 # Prefer native OpenCode CLI when available (for commands like `auth login`).
-self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+SCRIPT_DIR="$(resolve_script_dir)"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/_shim.sh"
+
+self_real="$(df_realpath "${BASH_SOURCE[0]}")"
 while IFS= read -r candidate; do
   [ -n "$candidate" ] || continue
-  candidate_real="$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")"
-  if [ -x "$candidate" ] && [ "$candidate_real" != "$self" ]; then
+  candidate_real="$(df_realpath "$candidate" 2>/dev/null || echo "$candidate")"
+  if [ -x "$candidate" ] && [ "$candidate_real" != "$self_real" ]; then
     exec "$candidate" "$@"
   fi
 done < <(which -a opencode 2>/dev/null || true)
+
+# When NVM is installed but not loaded (PATH missing), still prefer the native CLI.
+if nvm_opencode="$(df_find_nvm_cmd_path opencode 2>/dev/null || true)"; then
+  df_path_prepend "$(dirname "$nvm_opencode")"
+  exec "$nvm_opencode" "$@"
+fi
 
 if command -v omo-sync >/dev/null 2>&1; then
   exec omo-sync "$@"
