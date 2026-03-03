@@ -103,11 +103,6 @@ install_nvm() {
     # Source NVM and install latest Node.js
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-    if command_exists node && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Node.js is already installed"
-        return 0
-    fi
     
     if command_exists nvm; then
         print_info "Installing latest Node.js via NVM..."
@@ -908,13 +903,13 @@ is_dotfiles_auto_update_timer_ready() {
 
 run_npm_global_install() {
     local package="$1"
-    if command_exists npm; then
-        retry_command "npm install -g '$package'" "install $package"
+    if [ -s "$HOME/.nvm/nvm.sh" ]; then
+        retry_command "bash -lc 'export NVM_DIR=\"$HOME/.nvm\"; source \"$HOME/.nvm/nvm.sh\" && (nvm use node >/dev/null 2>&1 || (nvm install node && nvm use node && nvm alias default node)) && npm install -g \"$package\"'" "install $package via nvm"
         return $?
     fi
 
-    if [ -s "$HOME/.nvm/nvm.sh" ]; then
-        retry_command "bash -lc 'source \"$HOME/.nvm/nvm.sh\" && npm install -g \"$package\"'" "install $package via nvm"
+    if command_exists npm; then
+        retry_command "npm install -g '$package'" "install $package"
         return $?
     fi
 
