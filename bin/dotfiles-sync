@@ -1,6 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SCRIPT_DIR=""
+DEFAULT_REPO=""
+
+DOTFILES_REPO=""
+DOTFILES_REMOTE="origin"
+DOTFILES_BRANCH="main"
+DRY_RUN=0
+SUBCOMMAND="run"
+
+DEFAULT_POST_CMD='~/.local/bin/opencode-config-sync --force'
+DEFAULT_LOCK_FILE="$HOME/.cache/dotfiles-sync.lock"
+
 resolve_script_dir() {
   local source="${BASH_SOURCE[0]}"
   while [ -L "$source" ]; do
@@ -14,110 +26,698 @@ resolve_script_dir() {
   cd -P "$(dirname "$source")" && pwd
 }
 
-SCRIPT_DIR="$(resolve_script_dir)"
-DEFAULT_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
-
-DOTFILES_REPO="${DOTFILES_REPO:-$DEFAULT_REPO}"
-DOTFILES_REMOTE="${DOTFILES_REMOTE:-origin}"
-DOTFILES_BRANCH="${DOTFILES_BRANCH:-main}"
-DRY_RUN=0
-
 show_help() {
-  cat <<'EOF'
-Usage: dotfiles-sync [OPTIONS]
+  cat <<'EOF_HELP'
+Usage:
+  dotfiles-sync <command> [options]
+
+Commands:
+  run       Run local sync and, if controller, fan-out sync
+  local     Run local sync only
+  fanout    Run fan-out sync only
+  validate  Validate inventory/allowlist configuration
 
 Options:
-  --repo PATH               Local dotfiles repository path
-  --remote NAME             Git remote name to pull from
-  --branch NAME             Branch to pull
-  --dry-run                 Print actions without applying
-  --help, -h                Show this help
-EOF
+  --repo PATH     Dotfiles repository path
+  --remote NAME   Git remote name (default: origin)
+  --branch NAME   Git branch (default: main)
+  --dry-run       Print actions without applying
+  --help, -h      Show this help
+EOF_HELP
 }
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --repo)
-      DOTFILES_REPO="$2"
-      shift 2
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+expand_home_path() {
+  local value="$1"
+  if [[ "$value" == "~" ]]; then
+    printf '%s' "$HOME"
+    return 0
+  fi
+  if [[ "$value" == "~/"* ]]; then
+    printf '%s/%s' "$HOME" "${value#~/}"
+    return 0
+  fi
+  printf '%s' "$value"
+}
+
+require_arg_value() {
+  local flag="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $flag" >&2
+    exit 2
+  fi
+}
+
+is_true() {
+  case "${1:-}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
       ;;
-    --remote)
-      DOTFILES_REMOTE="$2"
-      shift 2
-      ;;
-    --branch)
-      DOTFILES_BRANCH="$2"
-      shift 2
-      ;;
-    --servers|--remote-path|--user|--ssh-port|--identity|--post-cmd)
-      printf '[warn] option %s is deprecated and ignored (pull-based sync only)\n' "$1" >&2
-      shift 2
-      ;;
-    --dry-run)
-      DRY_RUN=1
-      shift
-      ;;
-    --help|-h)
-      show_help
-      exit 0
-      ;;
-  *)
-      echo "Unknown argument: $1" >&2
-      exit 2
+    *)
+      return 1
       ;;
   esac
-done
+}
 
-require_repo_state() {
+get_server_id() {
+  if [[ -n "${DOTFILES_SERVER_ID:-}" ]]; then
+    printf '%s' "$DOTFILES_SERVER_ID"
+    return 0
+  fi
+  hostname -s 2>/dev/null || hostname
+}
+
+get_inventory_file() {
+  local value="${DOTFILES_SYNC_INVENTORY:-$DOTFILES_REPO/sync/servers.tsv}"
+  expand_home_path "$value"
+}
+
+get_allowlist_file() {
+  local value="${DOTFILES_SYNC_ALLOWLIST:-$DOTFILES_REPO/sync/overlay-allowlist.txt}"
+  expand_home_path "$value"
+}
+
+get_post_cmd() {
+  printf '%s' "${DOTFILES_SYNC_POST_CMD:-$DEFAULT_POST_CMD}"
+}
+
+get_retry_max() {
+  printf '%s' "${DOTFILES_SYNC_RETRY_MAX:-3}"
+}
+
+get_retry_base_sec() {
+  printf '%s' "${DOTFILES_SYNC_RETRY_BASE_SEC:-2}"
+}
+
+validate_allowlist_path() {
+  local path="$1"
+  if [[ -z "$path" ]]; then
+    echo "[error] allowlist path cannot be empty" >&2
+    return 1
+  fi
+  if [[ "$path" == /* ]]; then
+    echo "[error] allowlist path must be relative: $path" >&2
+    return 1
+  fi
+  if [[ "$path" == *".."* ]]; then
+    echo "[error] allowlist path cannot contain '..': $path" >&2
+    return 1
+  fi
+  return 0
+}
+
+parse_args() {
+  local parsed_subcommand=""
+  if [[ $# -gt 0 ]]; then
+    case "$1" in
+      run|local|fanout|validate)
+        parsed_subcommand="$1"
+        shift
+        ;;
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      -* )
+        echo "Unknown command: $1" >&2
+        show_help >&2
+        exit 2
+        ;;
+      *)
+        echo "Unknown command: $1" >&2
+        show_help >&2
+        exit 2
+        ;;
+    esac
+  fi
+
+  SUBCOMMAND="${parsed_subcommand:-run}"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --repo)
+        require_arg_value "$1" "${2:-}"
+        DOTFILES_REPO="$2"
+        shift 2
+        ;;
+      --remote)
+        require_arg_value "$1" "${2:-}"
+        DOTFILES_REMOTE="$2"
+        shift 2
+        ;;
+      --branch)
+        require_arg_value "$1" "${2:-}"
+        DOTFILES_BRANCH="$2"
+        shift 2
+        ;;
+      --dry-run)
+        DRY_RUN=1
+        shift
+        ;;
+      --help|-h)
+        show_help
+        exit 0
+        ;;
+      *)
+        echo "Unknown argument: $1" >&2
+        exit 2
+        ;;
+    esac
+  done
+}
+
+resolve_clone_url() {
+  local repo="$1"
+  if git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$repo" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true
+    return 0
+  fi
+  if git -C "$DEFAULT_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git -C "$DEFAULT_REPO" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true
+    return 0
+  fi
+  printf '%s' ""
+}
+
+ensure_repo_exists() {
   local repo="$1"
 
-  if ! git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    echo "[skip] not a git repo: $repo" >&2
+  if git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if [[ -e "$repo" && ! -d "$repo" ]]; then
+    echo "[error] repo path exists but is not a directory: $repo" >&2
     return 1
+  fi
+
+  if [[ -d "$repo" ]] && [[ -n "$(ls -A "$repo" 2>/dev/null)" ]]; then
+    echo "[error] repo directory exists but is not a git repo: $repo" >&2
+    return 1
+  fi
+
+  local clone_url
+  clone_url="$(resolve_clone_url "$repo")"
+  if [[ -z "$clone_url" ]]; then
+    echo "[error] cannot determine clone URL for remote '$DOTFILES_REMOTE'" >&2
+    return 1
+  fi
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "[dry-run] would clone $clone_url -> $repo"
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$repo")"
+  echo "[info] cloning dotfiles repo to $repo"
+  git clone --origin "$DOTFILES_REMOTE" "$clone_url" "$repo"
+}
+
+sync_git_repo_force() {
+  local repo="$1"
+  local before after
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "[dry-run] would run: git -C \"$repo\" fetch \"$DOTFILES_REMOTE\" \"$DOTFILES_BRANCH\""
+    echo "[dry-run] would run: git -C \"$repo\" reset --hard \"$DOTFILES_REMOTE/$DOTFILES_BRANCH\""
+    echo "[dry-run] would run: git -C \"$repo\" clean -fd"
+    echo "[dry-run] would run: git -C \"$repo\" pull --ff-only \"$DOTFILES_REMOTE\" \"$DOTFILES_BRANCH\""
+    return 0
   fi
 
   if ! git -C "$repo" remote get-url "$DOTFILES_REMOTE" >/dev/null 2>&1; then
-    echo "[skip] remote not found: $DOTFILES_REMOTE" >&2
+    echo "[error] remote not found in repo: $DOTFILES_REMOTE" >&2
     return 1
   fi
 
-  if ! git -C "$repo" diff --quiet --ignore-submodules --; then
-    echo "[skip] repo has unstaged changes: $repo" >&2
+  before="$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo 'none')"
+
+  git -C "$repo" fetch "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"
+  git -C "$repo" reset --hard "$DOTFILES_REMOTE/$DOTFILES_BRANCH"
+  git -C "$repo" clean -fd
+  git -C "$repo" pull --ff-only "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"
+
+  after="$(git -C "$repo" rev-parse --short HEAD)"
+  if [[ "$before" == "$after" ]]; then
+    echo "[ok] dotfiles already up to date ($after)"
+  else
+    echo "[ok] dotfiles updated: $before -> $after"
+  fi
+}
+
+apply_overlays() {
+  local repo="$1"
+  local server_id="$2"
+  local allowlist line rel_path src dst
+
+  allowlist="$(get_allowlist_file)"
+  if [[ ! -f "$allowlist" ]]; then
+    echo "[skip] allowlist not found: $allowlist"
+    return 0
+  fi
+
+  if ! command -v rsync >/dev/null 2>&1; then
+    echo "[error] rsync is required for overlay sync" >&2
     return 1
   fi
 
-  if ! git -C "$repo" diff --cached --quiet --ignore-submodules --; then
-    echo "[skip] repo has staged changes: $repo" >&2
-    return 1
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    rel_path="$(trim "$line")"
+    [[ -z "$rel_path" ]] && continue
+
+    if ! validate_allowlist_path "$rel_path"; then
+      return 1
+    fi
+
+    src="$repo/overlays/$server_id/$rel_path"
+    dst="$HOME/$rel_path"
+
+    if [[ ! -e "$src" ]]; then
+      echo "[skip] no overlay for $server_id: $rel_path"
+      continue
+    fi
+
+    if [[ "$DRY_RUN" == "1" ]]; then
+      if [[ -d "$src" ]]; then
+        echo "[dry-run] would run: rsync -a --delete \"$src/\" \"$dst/\""
+      else
+        echo "[dry-run] would run: rsync -a --delete \"$src\" \"$dst\""
+      fi
+      continue
+    fi
+
+    if [[ -d "$src" ]]; then
+      mkdir -p "$dst"
+      rsync -a --delete "$src/" "$dst/"
+    else
+      mkdir -p "$(dirname "$dst")"
+      rsync -a --delete "$src" "$dst"
+    fi
+
+    echo "[ok] overlay applied: $rel_path"
+  done < "$allowlist"
+}
+
+run_post_cmd() {
+  local post_cmd
+  post_cmd="$(get_post_cmd)"
+  if [[ -z "$post_cmd" ]]; then
+    return 0
   fi
 
-  if [ -n "$(git -C "$repo" ls-files --others --exclude-standard)" ]; then
-    echo "[skip] repo has untracked files: $repo" >&2
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "[dry-run] would run post command: $post_cmd"
+    return 0
+  fi
+
+  bash -lc "$post_cmd"
+}
+
+do_local_sync() {
+  local server_id
+  server_id="$(get_server_id)"
+
+  if ! ensure_repo_exists "$DOTFILES_REPO"; then
+    return 1
+  fi
+  if ! sync_git_repo_force "$DOTFILES_REPO"; then
+    return 1
+  fi
+  if ! apply_overlays "$DOTFILES_REPO" "$server_id"; then
+    return 1
+  fi
+  if ! run_post_cmd; then
+    echo "[error] post command failed" >&2
     return 1
   fi
 
   return 0
 }
 
-if ! require_repo_state "$DOTFILES_REPO"; then
-  exit 0
+validate_inventory_file() {
+  local inventory="$1"
+  local header_expected=$'server_id\tssh_host\trepo_path\tssh_port\tpost_cmd\tenabled'
+  local line line_no=0
+  local seen_header=0
+  local tab_count
+  local server_id ssh_host repo_path ssh_port post_cmd enabled
+  declare -A seen_ids=()
+
+  if [[ ! -f "$inventory" ]]; then
+    echo "[error] inventory file not found: $inventory" >&2
+    return 1
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    line="$(trim "$line")"
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" == \#* ]]; then
+      continue
+    fi
+
+    if [[ "$seen_header" == "0" ]]; then
+      if [[ "$line" != "$header_expected" ]]; then
+        echo "[error] invalid inventory header in $inventory:$line_no" >&2
+        echo "[error] expected: $header_expected" >&2
+        return 1
+      fi
+      seen_header=1
+      continue
+    fi
+
+    tab_count="$(printf '%s' "$line" | tr -cd '\t' | wc -c | tr -d ' ')"
+    if [[ "$tab_count" != "5" ]]; then
+      echo "[error] inventory row must have 6 TSV columns: $inventory:$line_no" >&2
+      return 1
+    fi
+
+    server_id="$(printf '%s' "$line" | cut -f1)"
+    ssh_host="$(printf '%s' "$line" | cut -f2)"
+    repo_path="$(printf '%s' "$line" | cut -f3)"
+    ssh_port="$(printf '%s' "$line" | cut -f4)"
+    post_cmd="$(printf '%s' "$line" | cut -f5)"
+    enabled="$(printf '%s' "$line" | cut -f6)"
+    server_id="$(trim "$server_id")"
+    ssh_host="$(trim "$ssh_host")"
+    repo_path="$(trim "$repo_path")"
+    ssh_port="$(trim "$ssh_port")"
+    enabled="$(trim "$enabled")"
+
+    if [[ -z "$server_id" ]]; then
+      echo "[error] server_id is required: $inventory:$line_no" >&2
+      return 1
+    fi
+    if [[ "$enabled" != "0" && "$enabled" != "1" ]]; then
+      echo "[error] enabled must be 0 or 1: $inventory:$line_no" >&2
+      return 1
+    fi
+    if [[ "$enabled" == "1" && -z "$ssh_host" ]]; then
+      echo "[error] ssh_host is required when enabled=1: $inventory:$line_no" >&2
+      return 1
+    fi
+    if [[ -n "$ssh_port" && ! "$ssh_port" =~ ^[0-9]+$ ]]; then
+      echo "[error] ssh_port must be numeric: $inventory:$line_no" >&2
+      return 1
+    fi
+    if [[ -n "${seen_ids[$server_id]:-}" ]]; then
+      echo "[error] duplicate server_id '$server_id' in inventory" >&2
+      return 1
+    fi
+    seen_ids[$server_id]=1
+  done < "$inventory"
+
+  if [[ "$seen_header" != "1" ]]; then
+    echo "[error] inventory header missing: $inventory" >&2
+    return 1
+  fi
+
+  return 0
+}
+
+validate_allowlist_file() {
+  local allowlist="$1"
+  local line rel_path
+
+  if [[ ! -f "$allowlist" ]]; then
+    echo "[error] allowlist file not found: $allowlist" >&2
+    return 1
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    rel_path="$(trim "$line")"
+    [[ -z "$rel_path" ]] && continue
+    if ! validate_allowlist_path "$rel_path"; then
+      return 1
+    fi
+  done < "$allowlist"
+
+  return 0
+}
+
+build_ssh_target() {
+  local host="$1"
+  local user="${DOTFILES_SYNC_SSH_USER:-}"
+
+  if [[ -n "$user" && "$host" != *@* ]]; then
+    printf '%s@%s' "$user" "$host"
+  else
+    printf '%s' "$host"
+  fi
+}
+
+run_remote_once() {
+  local ssh_host="$1"
+  local repo_path="$2"
+  local ssh_port="$3"
+  local extra_post_cmd="$4"
+  local clone_url="$5"
+
+  local target env_cmd
+  target="$(build_ssh_target "$ssh_host")"
+
+  if [[ "$DRY_RUN" == "1" ]]; then
+    echo "[dry-run] would sync remote host=$target repo=$repo_path"
+    if [[ -n "$extra_post_cmd" ]]; then
+      echo "[dry-run] would run remote extra post command: $extra_post_cmd"
+    fi
+    return 0
+  fi
+
+  printf -v env_cmd 'DOTFILES_TARGET_REPO=%q DOTFILES_REMOTE=%q DOTFILES_BRANCH=%q DOTFILES_CLONE_URL=%q DOTFILES_DRY_RUN=%q DOTFILES_EXTRA_POST_CMD=%q bash -s' \
+    "$repo_path" "$DOTFILES_REMOTE" "$DOTFILES_BRANCH" "$clone_url" "$DRY_RUN" "$extra_post_cmd"
+
+  local ssh_cmd=(ssh)
+  if [[ -n "$ssh_port" ]]; then
+    ssh_cmd+=(-p "$ssh_port")
+  elif [[ -n "${DOTFILES_SYNC_SSH_PORT:-}" ]]; then
+    ssh_cmd+=(-p "${DOTFILES_SYNC_SSH_PORT}")
+  fi
+  if [[ -n "${DOTFILES_SYNC_SSH_IDENTITY:-}" ]]; then
+    ssh_cmd+=(-i "${DOTFILES_SYNC_SSH_IDENTITY}")
+  fi
+  ssh_cmd+=("$target" "$env_cmd")
+
+  "${ssh_cmd[@]}" <<'REMOTE'
+set -euo pipefail
+
+if [[ "$DOTFILES_TARGET_REPO" == "~" ]]; then
+  DOTFILES_TARGET_REPO="$HOME"
+elif [[ "$DOTFILES_TARGET_REPO" == "~/"* ]]; then
+  DOTFILES_TARGET_REPO="$HOME/${DOTFILES_TARGET_REPO#~/}"
 fi
 
-before="$(git -C "$DOTFILES_REPO" rev-parse --short HEAD)"
+if ! git -C "$DOTFILES_TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  mkdir -p "$(dirname "$DOTFILES_TARGET_REPO")"
+  git clone --origin "$DOTFILES_REMOTE" "$DOTFILES_CLONE_URL" "$DOTFILES_TARGET_REPO"
+fi
 
-if [[ "$DRY_RUN" == "1" ]]; then
-  echo "[dry-run] would run: git -C \"$DOTFILES_REPO\" pull --ff-only \"$DOTFILES_REMOTE\" \"$DOTFILES_BRANCH\""
+SYNC_SCRIPT="$DOTFILES_TARGET_REPO/bin/dotfiles-sync"
+SYNC_ARGS=(local --repo "$DOTFILES_TARGET_REPO" --remote "$DOTFILES_REMOTE" --branch "$DOTFILES_BRANCH")
+if [[ "$DOTFILES_DRY_RUN" == "1" ]]; then
+  SYNC_ARGS+=(--dry-run)
+fi
+
+if [[ -x "$SYNC_SCRIPT" ]]; then
+  "$SYNC_SCRIPT" "${SYNC_ARGS[@]}"
+elif [[ -f "$SYNC_SCRIPT" ]]; then
+  bash "$SYNC_SCRIPT" "${SYNC_ARGS[@]}"
 else
-  if ! git -C "$DOTFILES_REPO" pull --ff-only "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"; then
-    echo "[error] dotfiles pull failed for $DOTFILES_REPO" >&2
-    exit 1
+  echo "[error] sync script not found: $SYNC_SCRIPT" >&2
+  exit 1
+fi
+
+if [[ -n "$DOTFILES_EXTRA_POST_CMD" ]]; then
+  if [[ "$DOTFILES_DRY_RUN" == "1" ]]; then
+    echo "[dry-run] would run post command: $DOTFILES_EXTRA_POST_CMD"
+  else
+    bash -lc "$DOTFILES_EXTRA_POST_CMD"
   fi
 fi
+REMOTE
+}
 
-after="$(git -C "$DOTFILES_REPO" rev-parse --short HEAD)"
+sync_remote_with_retry() {
+  local server_id="$1"
+  local ssh_host="$2"
+  local repo_path="$3"
+  local ssh_port="$4"
+  local extra_post_cmd="$5"
+  local clone_url="$6"
 
-if [[ "$before" == "$after" ]]; then
-  echo "[ok] dotfiles already up to date ($after)"
-else
-  echo "[ok] dotfiles updated: $before -> $after"
-fi
+  local retry_max retry_base attempt sleep_sec
+  retry_max="$(get_retry_max)"
+  retry_base="$(get_retry_base_sec)"
+
+  attempt=1
+  while (( attempt <= retry_max )); do
+    if run_remote_once "$ssh_host" "$repo_path" "$ssh_port" "$extra_post_cmd" "$clone_url"; then
+      echo "[ok] remote synced: $server_id"
+      return 0
+    fi
+
+    if (( attempt == retry_max )); then
+      break
+    fi
+
+    sleep_sec=$(( retry_base * (2 ** (attempt - 1)) ))
+    echo "[warn] remote sync failed for $server_id (attempt $attempt/$retry_max), retrying in ${sleep_sec}s" >&2
+    sleep "$sleep_sec"
+    attempt=$((attempt + 1))
+  done
+
+  echo "[error] remote sync failed after retries: $server_id" >&2
+  return 1
+}
+
+do_fanout_sync() {
+  local inventory server_id_local clone_url
+  local line line_no=0 seen_header=0
+  local tab_count server_id ssh_host repo_path ssh_port post_cmd enabled
+  local rc=0
+  local -a pids=()
+  local -a labels=()
+
+  inventory="$(get_inventory_file)"
+  if ! validate_inventory_file "$inventory"; then
+    return 1
+  fi
+
+  server_id_local="$(get_server_id)"
+  clone_url="$(resolve_clone_url "$DOTFILES_REPO")"
+  if [[ -z "$clone_url" ]]; then
+    echo "[error] cannot determine clone URL for fan-out" >&2
+    return 1
+  fi
+
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line_no=$((line_no + 1))
+    line="$(trim "$line")"
+    [[ -z "$line" ]] && continue
+    [[ "$line" == \#* ]] && continue
+
+    if [[ "$seen_header" == "0" ]]; then
+      seen_header=1
+      continue
+    fi
+
+    tab_count="$(printf '%s' "$line" | tr -cd '\t' | wc -c | tr -d ' ')"
+    if [[ "$tab_count" != "5" ]]; then
+      echo "[error] invalid inventory row: $inventory:$line_no" >&2
+      rc=1
+      continue
+    fi
+
+    server_id="$(printf '%s' "$line" | cut -f1)"
+    ssh_host="$(printf '%s' "$line" | cut -f2)"
+    repo_path="$(printf '%s' "$line" | cut -f3)"
+    ssh_port="$(printf '%s' "$line" | cut -f4)"
+    post_cmd="$(printf '%s' "$line" | cut -f5)"
+    enabled="$(printf '%s' "$line" | cut -f6)"
+    server_id="$(trim "$server_id")"
+    ssh_host="$(trim "$ssh_host")"
+    repo_path="$(trim "$repo_path")"
+    ssh_port="$(trim "$ssh_port")"
+    post_cmd="$(trim "$post_cmd")"
+    enabled="$(trim "$enabled")"
+
+    [[ "$enabled" == "1" ]] || continue
+
+    if [[ "$server_id" == "$server_id_local" ]]; then
+      echo "[skip] skipping self target: $server_id"
+      continue
+    fi
+
+    if [[ -z "$repo_path" ]]; then
+      repo_path="$DOTFILES_REPO"
+    fi
+
+    (
+      sync_remote_with_retry "$server_id" "$ssh_host" "$repo_path" "$ssh_port" "$post_cmd" "$clone_url"
+    ) &
+    pids+=("$!")
+    labels+=("$server_id")
+  done < "$inventory"
+
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      echo "[error] fan-out target failed: ${labels[$i]}" >&2
+      rc=1
+    fi
+  done
+
+  return "$rc"
+}
+
+run_with_lock() {
+  local lock_file="${DOTFILES_SYNC_LOCK_FILE:-$DEFAULT_LOCK_FILE}"
+  lock_file="$(expand_home_path "$lock_file")"
+
+  if ! command -v flock >/dev/null 2>&1; then
+    echo "[warn] flock not found; running without lock" >&2
+    do_local_sync
+    return $?
+  fi
+
+  mkdir -p "$(dirname "$lock_file")"
+  exec 9>"$lock_file"
+  if ! flock -n 9; then
+    echo "[skip] dotfiles-sync already running (lock: $lock_file)"
+    return 0
+  fi
+
+  do_local_sync
+}
+
+do_validate() {
+  local inventory allowlist
+  inventory="$(get_inventory_file)"
+  allowlist="$(get_allowlist_file)"
+
+  validate_inventory_file "$inventory"
+  validate_allowlist_file "$allowlist"
+  echo "[ok] validation passed"
+}
+
+main() {
+  SCRIPT_DIR="$(resolve_script_dir)"
+  DEFAULT_REPO="$(cd "$SCRIPT_DIR/.." && pwd)"
+  DOTFILES_REPO="${DOTFILES_REPO:-$DEFAULT_REPO}"
+
+  parse_args "$@"
+  DOTFILES_REPO="$(expand_home_path "$DOTFILES_REPO")"
+
+  case "$SUBCOMMAND" in
+    run)
+      run_with_lock || return 1
+      if is_true "${DOTFILES_SYNC_CONTROLLER:-false}"; then
+        do_fanout_sync
+      fi
+      ;;
+    local)
+      do_local_sync
+      ;;
+    fanout)
+      do_fanout_sync
+      ;;
+    validate)
+      do_validate
+      ;;
+    *)
+      echo "Unknown command: $SUBCOMMAND" >&2
+      exit 2
+      ;;
+  esac
+}
+
+main "$@"

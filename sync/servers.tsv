@@ -1,0 +1,3 @@
+server_id	ssh_host	repo_path	ssh_port	post_cmd	enabled
+# Example:
+# gpu-1	gpu-1.example.com	~/dotfiles	22	~/.local/bin/opencode-config-sync --force	0

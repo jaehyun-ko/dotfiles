@@ -1,0 +1,2 @@
+# Relative paths under $HOME that may be synchronized via overlays/<server_id>/
+.config/opencode/

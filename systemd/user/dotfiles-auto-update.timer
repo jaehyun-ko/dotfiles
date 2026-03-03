@@ -1,9 +1,9 @@
 [Unit]
-Description=Run Dotfiles Auto Updater hourly
+Description=Run Dotfiles Auto Updater every 15 minutes
 
 [Timer]
 OnBootSec=7m
-OnUnitActiveSec=1h
+OnUnitActiveSec=15m
 Persistent=true
 
 [Install]

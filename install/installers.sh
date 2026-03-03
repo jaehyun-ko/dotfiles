@@ -891,9 +891,7 @@ is_dotfiles_auto_update_timer_ready() {
         "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer" \
         "$user_dir/dotfiles-auto-update.service" \
         "$user_dir/dotfiles-auto-update.timer" \
-        "__DOTFILES_DIR__=$DOTFILES_DIR" \
-        "__DOTFILES_REMOTE__=$DOTFILES_AUTO_UPDATE_REMOTE" \
-        "__DOTFILES_BRANCH__=$DOTFILES_AUTO_UPDATE_BRANCH"
+        "__DOTFILES_DIR__=$DOTFILES_DIR"
 }
 
 run_npm_global_install() {
@@ -1050,9 +1048,7 @@ install_dotfiles_auto_update_timer() {
         "$DOTFILES_DIR/systemd/user/dotfiles-auto-update.timer" \
         "$user_dir/dotfiles-auto-update.service" \
         "$user_dir/dotfiles-auto-update.timer" \
-        "__DOTFILES_DIR__=$DOTFILES_DIR" \
-        "__DOTFILES_REMOTE__=$DOTFILES_AUTO_UPDATE_REMOTE" \
-        "__DOTFILES_BRANCH__=$DOTFILES_AUTO_UPDATE_BRANCH"
+        "__DOTFILES_DIR__=$DOTFILES_DIR"
 }
 
 install_codex_omo_sync_stack() {

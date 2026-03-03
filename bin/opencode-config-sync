@@ -2,14 +2,14 @@
 set -euo pipefail
 
 show_help() {
-  cat <<'EOF'
+  cat <<'EOF_HELP'
 Usage: opencode-config-sync [--check] [--force]
 
 Options:
   --check     Validate links only, do not modify files
   --force     Replace existing files/symlinks with managed symlinks
   --help, -h  Show this help
-EOF
+EOF_HELP
 }
 
 mode="sync"
@@ -47,9 +47,19 @@ resolve_script_dir() {
   cd -P "$(dirname "$source")" && pwd
 }
 
+get_server_id() {
+  if [[ -n "${DOTFILES_SERVER_ID:-}" ]]; then
+    printf '%s' "$DOTFILES_SERVER_ID"
+    return 0
+  fi
+  hostname -s 2>/dev/null || hostname
+}
+
 script_dir="$(resolve_script_dir)"
-dotfiles_dir="$(cd "$script_dir/.." && pwd)"
-src_dir="${DOTFILES_OPENCODE_DIR:-$dotfiles_dir/opencode}"
+dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+base_src_dir="${DOTFILES_OPENCODE_DIR:-$dotfiles_dir/opencode}"
+server_id="$(get_server_id)"
+overlay_src_dir="$dotfiles_dir/overlays/$server_id/.config/opencode"
 dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 files=("opencode.json" "oh-my-opencode.json")
 
@@ -59,16 +69,21 @@ fi
 
 status=0
 for file in "${files[@]}"; do
-  src="$src_dir/$file"
+  src="$base_src_dir/$file"
+  overlay_src="$overlay_src_dir/$file"
   dst="$dst_dir/$file"
 
-  if [ ! -f "$src" ]; then
+  if [[ -f "$overlay_src" ]]; then
+    src="$overlay_src"
+  fi
+
+  if [[ ! -f "$src" ]]; then
     echo "[error] missing source config: $src" >&2
     status=1
     continue
   fi
 
-  if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
+  if [[ -L "$dst" ]] && [[ "$(readlink "$dst" 2>/dev/null || true)" == "$src" ]]; then
     continue
   fi
 
@@ -78,14 +93,14 @@ for file in "${files[@]}"; do
     continue
   fi
 
-  if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]; then
+  if [[ -L "$dst" ]] && [[ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]]; then
     if [[ "$force" != "true" ]]; then
       echo "[skip] keeping user symlink: $dst (use --force to relink)" >&2
       continue
     fi
   fi
 
-  if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+  if [[ -e "$dst" && ! -L "$dst" ]]; then
     if [[ "$force" != "true" ]]; then
       echo "[skip] keeping existing file: $dst (use --force to relink)" >&2
       continue

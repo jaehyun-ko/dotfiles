@@ -71,32 +71,68 @@ Environment variables:
 
 During install, it also sets up:
 
-- `dotfiles-auto-update.timer` (user systemd, hourly)
+- `dotfiles-auto-update.timer` (user systemd, every 15 minutes)
 - `dotfiles-auto-update.service` using `bin/dotfiles-sync`
 
 Behavior:
 
-- Runs `git pull --ff-only` on your dotfiles repo
-- Auto-skips update when the repo has local staged/unstaged/untracked changes
-- Pull-based model: each server updates its own local dotfiles repo (no rsync fan-out)
+- Uses `dotfiles-sync run` (subcommand CLI)
+- Legacy flag-only interface (`dotfiles-sync --servers ...`) is removed
+- Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
+- Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
+- Runs `opencode-config-sync --force` after sync (host-aware source selection)
+- If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`
+- Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails
 
 Environment variables:
 
 - `DOTFILES_AUTO_UPDATE_REMOTE` (default: `origin`)
 - `DOTFILES_AUTO_UPDATE_BRANCH` (default: `main`)
+- `DOTFILES_SYNC_CONTROLLER` (default: `false`)
+- `DOTFILES_SYNC_SSH_USER`, `DOTFILES_SYNC_SSH_PORT`, `DOTFILES_SYNC_SSH_IDENTITY` (keep in local env file, not in git)
+- `DOTFILES_SERVER_ID` (optional; fallback: `hostname -s`)
+- `DOTFILES_SYNC_POST_CMD` (default: `~/.local/bin/opencode-config-sync --force`)
 
 Recommended setup for multi-server:
 
 1. Clone this repo on each server to the same path (for example `~/dotfiles`).
 2. Run `./install.sh -y` once per server.
-3. Let each server's `dotfiles-auto-update.timer` pull updates independently.
+3. Configure `sync/servers.tsv` and `sync/overlay-allowlist.txt` in the repo.
+4. Set `DOTFILES_SYNC_CONTROLLER=true` on exactly one control node.
+5. Let each server's `dotfiles-auto-update.timer` run; the controller will also fan-out.
 
 Example:
 
 ```bash
 export DOTFILES_AUTO_UPDATE_REMOTE="origin"
 export DOTFILES_AUTO_UPDATE_BRANCH="main"
+export DOTFILES_SYNC_CONTROLLER="true"
 ./install.sh
+```
+
+Optional local-only secrets (`~/.config/dotfiles-sync/config.env`):
+
+```bash
+DOTFILES_SYNC_SSH_USER=ubuntu
+DOTFILES_SYNC_SSH_IDENTITY=~/.ssh/id_ed25519
+DOTFILES_SYNC_SSH_PORT=22
+```
+
+Inventory format (`sync/servers.tsv`):
+
+```tsv
+server_id	ssh_host	repo_path	ssh_port	post_cmd	enabled
+gpu-1	gpu-1.example.com	~/dotfiles	22		1
+gpu-2	gpu-2.example.com	~/dotfiles	22		1
+```
+
+Manual commands:
+
+```bash
+dotfiles-sync validate --repo ~/dotfiles
+dotfiles-sync local --repo ~/dotfiles
+dotfiles-sync fanout --repo ~/dotfiles
+dotfiles-sync run --repo ~/dotfiles
 ```
 
 ## Post-Install

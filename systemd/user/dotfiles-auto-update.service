@@ -5,4 +5,6 @@ Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/env bash -lc '"__DOTFILES_DIR__/bin/dotfiles-sync" --repo "__DOTFILES_DIR__" --remote "__DOTFILES_REMOTE__" --branch "__DOTFILES_BRANCH__"'
+EnvironmentFile=-__DOTFILES_DIR__/systemd/user/dotfiles-sync.env
+EnvironmentFile=-%h/.config/dotfiles-sync/config.env
+ExecStart=/usr/bin/env bash -lc '"__DOTFILES_DIR__/bin/dotfiles-sync" run --repo "__DOTFILES_DIR__" --remote "${DOTFILES_AUTO_UPDATE_REMOTE:-origin}" --branch "${DOTFILES_AUTO_UPDATE_BRANCH:-main}"'

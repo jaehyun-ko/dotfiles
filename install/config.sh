@@ -18,6 +18,7 @@ export BASIC_PACKAGES=(
     "git"
     "curl"
     "wget"
+    "rsync"
     "tmux"
     "zsh"
 )
