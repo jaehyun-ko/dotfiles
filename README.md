@@ -57,6 +57,8 @@ During install, it sets up:
 Behavior:
 
 - Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
+- Single source of truth for the research workflow: `~/.codex/skills/agentic-researcher/SKILL.md`
+  - The repo-managed `omx/` pieces (`agentic-researcher` agent + `research-pipeline` skill) are intentionally thin wrappers.
 - Runs `codex-config-sync` before launching `codex` (applies model policy keys)
 - Runs `omx-config-sync` before launching `codex` (enables multi-agent + installs research pipeline preset)
 - Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)

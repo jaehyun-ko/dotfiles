@@ -5,8 +5,20 @@ description: Pipeline preset for running agentic-researcher (history->ideas->mat
 
 # Research Pipeline Skill
 
-`$research-pipeline` is an OMX workflow preset that runs the **agentic-researcher** loop
-while tracking progress in pipeline-like stages (via `omx_state`).
+`$research-pipeline` is a **thin OMX wrapper** around the canonical **agentic-researcher**
+workflow. It exists to:
+
+- provide a convenient “run this research loop” entrypoint, and
+- map progress to OMX state phases (HUD-friendly).
+
+## Single Source of Truth (important)
+
+The actual research workflow (gates, artifacts, paper policy, recommended flags) lives in:
+
+- `~/.codex/skills/agentic-researcher/SKILL.md`
+
+This wrapper intentionally **does not redefine** the research procedure. If something in the
+workflow changes, update the **agentic-researcher skill/repo**, not this file.
 
 ## Preconditions
 
@@ -24,37 +36,27 @@ Optional:
 - `conference_deadline` (`YYYY-MM-DD`)
 - `output_dir` (default: `<cwd>/.omx/agentic-researcher/<timestamp>`)
 
-## Pipeline Preset: `agentic-researcher`
+## OMX Phase Mapping (HUD only)
 
-Stages (do not skip gates):
+These phases are only for **OMX progress tracking**. For the authoritative gates/details,
+follow `~/.codex/skills/agentic-researcher/SKILL.md`.
 
-1) `stage:scope`
-   - Lock scope (in/out), timeframe, venue policy, and keywords.
+- `stage:scope`  → scope lock (H0)
+- `stage:history` → research-history gate (H0~H5)
+- `stage:ideas`  → idea evidence gate (I0~I3)
+- `stage:math`   → math checklist
+- `stage:toy`    → toy experiments
+- `stage:full`   → full experiments
+- `stage:docs`   → update cycle docs/rollup
+- `stage:paper`  → paper / paper-audit (only when triggered by readiness)
 
-2) `stage:history`
-   - Enforce Research-History Gate `H0~H5` (timeline, lineage, negative results, coverage audit, pub-status normalization).
+## Run (example)
 
-3) `stage:ideas`
-   - Enforce Idea Evidence Gate `I0~I3` (per-idea support minimum, claim-evidence map, contradiction check).
+For the current recommended flags and modes, see:
 
-4) `stage:math`
-   - Run math validation checklist and record `math_validation.json`.
+- `~/.codex/skills/agentic-researcher/SKILL.md`
 
-5) `stage:toy`
-   - Run toy experiments + gate; record `toy_result.json`.
-
-6) `stage:full`
-   - Run full experiments + retry policy; record `full_result.json`.
-
-7) `stage:docs`
-   - Update per-cycle docs + rollup summary.
-
-8) `stage:paper` (only when readiness triggered)
-   - Run paper pipeline (`paper` / `paper-audit`) per skill policy.
-
-## Canonical Run Command
-
-From `$AGENTIC_RESEARCHER_REPO`:
+Minimal example from `$AGENTIC_RESEARCHER_REPO`:
 
 ```bash
 bash scripts/bootstrap_uv_env.sh
@@ -63,10 +65,7 @@ uv run python scripts/researcher.py \
   --mode loop-multi \
   --question "<research_question>" \
   --keywords <k1> <k2> ... \
-  --conference-deadline <YYYY-MM-DD> \
-  --max-agent-threads auto \
-  --multi-failure-policy fail_fast \
-  --agent-profile default \
+  --conference-deadline "<YYYY-MM-DD>" \
   --output-dir "<output_dir>"
 ```
 
@@ -78,4 +77,3 @@ uv run python scripts/researcher.py \
   - `state_write({mode: "pipeline", current_phase: "stage:<name>"})`
 - **On completion**:
   - `state_write({mode: "pipeline", active: false, current_phase: "complete"})`
-

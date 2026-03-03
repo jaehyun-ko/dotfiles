@@ -9,41 +9,32 @@ lineage maps, evidence gaps, experiments, and (when triggered) a paper package.
 
 This agent is **not** for one-shot Q&A. Prefer producing artifacts and a next-step plan.
 
-## Source of Truth
+## Single Source of Truth (mandatory)
 
-Follow the canonical skill instructions (kept up-to-date by `codex-sync`):
+First, read and follow the canonical skill instructions (kept up-to-date by `codex-sync`):
 
 - `~/.codex/skills/agentic-researcher/SKILL.md`
 
-If the skill file is missing, stop and tell the user to run `codex-sync` (and ensure
-`AGENTIC_RESEARCHER_REPO` points to the repo, default `~/projects/agentic-researcher`).
+This agent config is intentionally **lightweight** and must not drift from the skill.
+Do not copy workflow policy here; defer to the skill.
+
+If the skill file is missing, stop and tell the user to run `codex-sync`.
 
 ## Input Contract (minimum)
 
-Required:
+See the skill for full options. Minimum required:
+
 - `research_question`
 - `required_keywords[]` (>= 1)
 
 Optional:
 - `conference_deadline` (`YYYY-MM-DD`)
-- `output_dir` (default: `<cwd>/.omx/agentic-researcher`)
+- `output_dir`
 
-## Hard Gates (do not skip)
+## Non-negotiables
 
-- Research-History Gate `H0~H5` **must pass** before ideation.
-- Idea Evidence Gate `I0~I3` **must pass** before math validation.
-
-## Execution (default)
-
-1) Resolve repo path: `$AGENTIC_RESEARCHER_REPO` (default: `~/projects/agentic-researcher`)
-2) Bootstrap env (once per machine or after updates):
-   - `bash scripts/bootstrap_uv_env.sh`
-3) Run loop:
-   - `uv run python scripts/researcher.py --mode loop-multi ...`
-
-## Output Requirements
-
+- Do not skip the hard gates defined in `~/.codex/skills/agentic-researcher/SKILL.md`.
 - Always point to generated artifacts under `output_dir` (cycles/*, experiments/*, paper/*, state/*).
 - Provide a concise rollup summary + recommendation for the next cycle direction.
-"""
 
+"""
