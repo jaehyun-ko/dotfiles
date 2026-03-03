@@ -54,3 +54,6 @@ coverage/
 
 # Rust
 target/
+
+# OMX runtime state (created during agent sessions)
+.omx/

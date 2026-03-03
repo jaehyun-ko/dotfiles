@@ -1,0 +1,289 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF_HELP'
+Usage: omx-config-sync [--check]
+
+Sync repo-managed OMX extensions:
+  - agentic-researcher native agent config (~/.omx/agents)
+  - research-pipeline skill (~/.agents/skills)
+  - Codex config.toml wiring ([features] + [agents."agentic-researcher"])
+
+Options:
+  --check     Validate configured values only, do not modify files
+  --help, -h  Show this help
+EOF_HELP
+}
+
+mode="sync"
+while (($# > 0)); do
+  case "$1" in
+    --check)
+      mode="check"
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+get_server_id() {
+  if [[ -n "${DOTFILES_SERVER_ID:-}" ]]; then
+    printf '%s' "$DOTFILES_SERVER_ID"
+    return 0
+  fi
+  hostname -s 2>/dev/null || hostname
+}
+
+trim() {
+  local value="$1"
+  value="${value#"${value%%[![:space:]]*}"}"
+  value="${value%"${value##*[![:space:]]}"}"
+  printf '%s' "$value"
+}
+
+toml_quote() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+ensure_section_kv() {
+  local section="$1"
+  local key="$2"
+  local expected_literal="$3"
+  local path="$4"
+  local expected_line
+  expected_line="$key = $expected_literal"
+
+  if [[ "$mode" == "check" ]]; then
+    if ! awk -v section="$section" -v key="$key" -v expected="$expected_literal" '
+      function is_header(line) { return match(line, /^[[:space:]]*\[[^]]+\][[:space:]]*$/) }
+      function header_name(line,   tmp) {
+        tmp = line
+        sub(/^[[:space:]]*\[/, "", tmp)
+        sub(/\][[:space:]]*$/, "", tmp)
+        return tmp
+      }
+      function strip_inline_comment(val) {
+        sub(/[[:space:]]*#.*/, "", val)
+        return val
+      }
+      BEGIN { in_section = 0; found = 0; ok = 0 }
+      {
+        if (is_header($0)) {
+          in_section = (header_name($0) == section)
+          next
+        }
+        if (!in_section) next
+        if ($0 ~ "^[[:space:]]*" key "[[:space:]]*=") {
+          found = 1
+          line = $0
+          sub(/^[[:space:]]*[^=]+=[[:space:]]*/, "", line)
+          line = strip_inline_comment(line)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+          if (line == expected) ok = 1
+          exit
+        }
+      }
+      END { exit((found && ok) ? 0 : 1) }
+    ' "$path"; then
+      echo "[missing] [$section] $key -> $expected_literal" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  local tmp
+  tmp="$(mktemp)"
+  awk -v section="$section" -v key="$key" -v line="$expected_line" '
+    function is_header(text) { return match(text, /^[[:space:]]*\[[^]]+\][[:space:]]*$/) }
+    function header_name(text,   tmp) {
+      tmp = text
+      sub(/^[[:space:]]*\[/, "", tmp)
+      sub(/\][[:space:]]*$/, "", tmp)
+      return tmp
+    }
+    BEGIN { in_section = 0; key_written = 0; section_seen = 0 }
+    {
+      if (is_header($0)) {
+        if (in_section && key_written == 0) {
+          print line
+          key_written = 1
+        }
+
+        in_section = (header_name($0) == section)
+        if (in_section) {
+          section_seen = 1
+          key_written = 0
+        }
+
+        print
+        next
+      }
+
+      if (in_section && $0 ~ "^[[:space:]]*" key "[[:space:]]*=") {
+        print line
+        key_written = 1
+        next
+      }
+
+      print
+    }
+    END {
+      if (section_seen == 1 && in_section == 1 && key_written == 0) {
+        print line
+      }
+      if (section_seen == 0) {
+        print ""
+        print "[" section "]"
+        print line
+      }
+    }
+  ' "$path" >"$tmp"
+  mv "$tmp" "$path"
+}
+
+sync_file() {
+  local src="$1"
+  local dst="$2"
+
+  if [[ "$mode" == "check" ]]; then
+    if [[ ! -f "$dst" ]]; then
+      echo "[missing] file: $dst" >&2
+      return 1
+    fi
+    if ! cmp -s "$src" "$dst"; then
+      echo "[diff] file differs: $dst" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$dst")"
+  cp "$src" "$dst"
+}
+
+check_dir_same() {
+  local src="$1"
+  local dst="$2"
+  local status=0
+
+  while IFS= read -r -d '' path; do
+    local rel="${path#$src/}"
+    local target="$dst/$rel"
+    if [[ ! -f "$target" ]]; then
+      echo "[missing] file: $target" >&2
+      status=1
+      continue
+    fi
+    if ! cmp -s "$path" "$target"; then
+      echo "[diff] file differs: $target" >&2
+      status=1
+    fi
+  done < <(find "$src" -type f -print0)
+
+  return "$status"
+}
+
+sync_dir() {
+  local src="$1"
+  local dst="$2"
+
+  if [[ "$mode" == "check" ]]; then
+    if [[ ! -d "$dst" ]]; then
+      echo "[missing] dir: $dst" >&2
+      return 1
+    fi
+    check_dir_same "$src" "$dst"
+    return $?
+  fi
+
+  mkdir -p "$dst"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete "$src/" "$dst/"
+    return 0
+  fi
+
+  rm -rf "$dst"
+  mkdir -p "$(dirname "$dst")"
+  cp -a "$src" "$dst"
+}
+
+script_dir="$(resolve_script_dir)"
+dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+server_id="$(get_server_id)"
+
+agent_src="$dotfiles_dir/omx/agents/agentic-researcher.toml"
+agent_overlay="$dotfiles_dir/overlays/$server_id/omx/agents/agentic-researcher.toml"
+if [[ -f "$agent_overlay" ]]; then
+  agent_src="$agent_overlay"
+fi
+if [[ ! -f "$agent_src" ]]; then
+  echo "[error] missing agent config source: $agent_src" >&2
+  exit 1
+fi
+
+skill_src="$dotfiles_dir/omx/skills/research-pipeline"
+skill_overlay="$dotfiles_dir/overlays/$server_id/omx/skills/research-pipeline"
+if [[ -d "$skill_overlay" ]]; then
+  skill_src="$skill_overlay"
+fi
+if [[ ! -f "$skill_src/SKILL.md" ]]; then
+  echo "[error] missing skill source: $skill_src/SKILL.md" >&2
+  exit 1
+fi
+
+agent_dst="$HOME/.omx/agents/agentic-researcher.toml"
+skill_dst="$HOME/.agents/skills/research-pipeline"
+
+codex_home="${CODEX_HOME:-$HOME/.codex}"
+config_path="$codex_home/config.toml"
+
+if [[ "$mode" == "sync" ]]; then
+  mkdir -p "$codex_home"
+  touch "$config_path"
+fi
+
+if [[ ! -f "$config_path" ]]; then
+  echo "[error] missing codex config: $config_path" >&2
+  exit 1
+fi
+
+status=0
+
+sync_file "$agent_src" "$agent_dst" || status=1
+sync_dir "$skill_src" "$skill_dst" || status=1
+
+ensure_section_kv "features" "multi_agent" "true" "$config_path" || status=1
+ensure_section_kv "features" "child_agents_md" "true" "$config_path" || status=1
+
+ensure_section_kv "agents.\"agentic-researcher\"" "description" "$(toml_quote "Academic research pipeline (agentic-researcher)")" "$config_path" || status=1
+ensure_section_kv "agents.\"agentic-researcher\"" "config_file" "$(toml_quote "$agent_dst")" "$config_path" || status=1
+
+if [[ "$status" -eq 0 && "$mode" == "sync" ]]; then
+  echo "[ok] synced OMX extensions (agentic-researcher + research-pipeline)" >&2
+fi
+
+exit "$status"

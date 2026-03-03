@@ -1,6 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+LAUNCHER_DIR="$(resolve_script_dir)"
+
 AGENTIC_RESEARCHER_REPO="${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
 SKILL_SYNC_CHANNEL="${SKILL_SYNC_CHANNEL:-stable}"
 SKILL_SYNC_CANARY_PERCENT="${SKILL_SYNC_CANARY_PERCENT:-10}"
@@ -8,8 +23,22 @@ SKILL_SYNC_INSTALL_ROOT="${SKILL_SYNC_INSTALL_ROOT:-$HOME/.codex/skills}"
 SKILL_SYNC_SKILL_NAME="${SKILL_SYNC_SKILL_NAME:-agentic-researcher}"
 SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES="${SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES:-15}"
 CODEX_BIN="${CODEX_BIN:-codex}"
+CODEX_CONFIG_SYNC_BIN="${CODEX_CONFIG_SYNC_BIN:-$LAUNCHER_DIR/codex-config-sync}"
+OMX_CONFIG_SYNC_BIN="${OMX_CONFIG_SYNC_BIN:-$LAUNCHER_DIR/omx-config-sync}"
 
 sync_script="$AGENTIC_RESEARCHER_REPO/scripts/skill_autoupdate.py"
+
+if [[ -x "$CODEX_CONFIG_SYNC_BIN" ]] || command -v "$CODEX_CONFIG_SYNC_BIN" >/dev/null 2>&1; then
+  if ! "$CODEX_CONFIG_SYNC_BIN"; then
+    echo "[warn] codex config sync failed; continuing launch." >&2
+  fi
+fi
+
+if [[ -x "$OMX_CONFIG_SYNC_BIN" ]] || command -v "$OMX_CONFIG_SYNC_BIN" >/dev/null 2>&1; then
+  if ! "$OMX_CONFIG_SYNC_BIN"; then
+    echo "[warn] omx config sync failed; continuing launch." >&2
+  fi
+fi
 
 if command -v uv >/dev/null 2>&1 && [ -f "$sync_script" ]; then
   sync_cmd=(

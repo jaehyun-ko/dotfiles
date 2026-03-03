@@ -844,7 +844,7 @@ is_codex_omo_sync_stack_ready() {
     if ! is_native_opencode_cli_installed; then
         return 1
     fi
-    if ! command_exists_or_nvm codex || ! command_exists_or_nvm oh-my-opencode; then
+    if ! command_exists_or_nvm codex || ! command_exists_or_nvm omx || ! command_exists_or_nvm oh-my-opencode; then
         return 1
     fi
     if ! is_codex_sync_launcher_installed "codex-sync"; then
@@ -856,7 +856,19 @@ is_codex_omo_sync_stack_ready() {
     if ! is_codex_sync_launcher_installed "dotfiles-sync"; then
         return 1
     fi
+    if ! is_codex_sync_launcher_installed "codex-config-sync"; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "omx-config-sync"; then
+        return 1
+    fi
     if ! is_codex_sync_launcher_installed "opencode-config-sync"; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "codex-plan"; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "codex-code"; then
         return 1
     fi
     if ! is_codex_sync_launcher_installed "opencode"; then
@@ -929,6 +941,25 @@ install_codex_cli() {
     print_status "Codex CLI installed"
 }
 
+install_oh_my_codex_cli() {
+    if command_exists_or_nvm omx && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "oh-my-codex (omx) is already installed"
+        return 0
+    fi
+
+    print_info "Installing oh-my-codex..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would install oh-my-codex"
+        return 0
+    fi
+
+    run_npm_global_install "oh-my-codex" || {
+        print_warning "Failed to install oh-my-codex"
+        return 1
+    }
+    print_status "oh-my-codex installed"
+}
+
 install_opencode_cli() {
     if is_native_opencode_cli_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "OpenCode CLI is already installed"
@@ -969,7 +1000,7 @@ install_oh_my_opencode_cli() {
 
 install_codex_sync_launchers() {
     print_info "Installing codex/omo sync launchers..."
-    local launchers=("codex-sync" "omo-sync" "dotfiles-sync" "opencode-config-sync" "opencode")
+    local launchers=("codex-sync" "omo-sync" "dotfiles-sync" "codex-config-sync" "omx-config-sync" "opencode-config-sync" "codex-plan" "codex-code" "opencode")
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then
@@ -1058,6 +1089,7 @@ install_codex_omo_sync_stack() {
     fi
     print_info "Installing Codex/OmO sync stack..."
     install_codex_cli || print_warning "Codex CLI install step had issues"
+    install_oh_my_codex_cli || print_warning "oh-my-codex install step had issues"
     install_opencode_cli || print_warning "OpenCode CLI install step had issues"
     install_oh_my_opencode_cli || print_warning "oh-my-opencode install step had issues"
     install_codex_sync_launchers || print_warning "launcher installation had issues"

@@ -10,7 +10,6 @@ DOTFILES_BRANCH="main"
 DRY_RUN=0
 SUBCOMMAND="run"
 
-DEFAULT_POST_CMD='~/.local/bin/opencode-config-sync --force'
 DEFAULT_LOCK_FILE="$HOME/.cache/dotfiles-sync.lock"
 
 resolve_script_dir() {
@@ -105,7 +104,13 @@ get_allowlist_file() {
 }
 
 get_post_cmd() {
-  printf '%s' "${DOTFILES_SYNC_POST_CMD:-$DEFAULT_POST_CMD}"
+  if [[ -n "${DOTFILES_SYNC_POST_CMD:-}" ]]; then
+    printf '%s' "$DOTFILES_SYNC_POST_CMD"
+    return 0
+  fi
+
+  local repo="${DOTFILES_REPO:-$DEFAULT_REPO}"
+  printf '%s' "\"$repo/bin/opencode-config-sync\" --force && \"$repo/bin/codex-config-sync\" && \"$repo/bin/omx-config-sync\""
 }
 
 get_retry_max() {

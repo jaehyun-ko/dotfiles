@@ -10,6 +10,8 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `git`: template `.gitconfig` with practical defaults
 - `claude/`: Claude Code setup (`CLAUDE.md`, `ML-STACK.md`, `rules/`, `settings.json`)
 - `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
+- `codex/`: Codex model routing policy (`model-policy.env`)
+- `omx/`: OMX extensions (native agent + workflow skill presets)
 - `install/`: reusable installer modules and phase orchestration
 
 ## Quick Start
@@ -46,16 +48,33 @@ The installer symlinks these files to `$HOME`:
 
 During install, it sets up:
 
-- `codex-sync`, `omo-sync`, `dotfiles-sync`, `opencode-config-sync`, `opencode` launchers in `~/.local/bin/`
+- `codex-sync`, `omo-sync`, `dotfiles-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode` launchers in `~/.local/bin/`
 - `agentic-skill-updater.timer` (user systemd, hourly)
-- Codex CLI / OpenCode CLI / oh-my-opencode install attempts
+- Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
 - Symlinked OpenCode config files from repo to `~/.config/opencode/`
+- Managed Codex model policy sync into `~/.codex/config.toml`
 
 Behavior:
 
 - Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
+- Runs `codex-config-sync` before launching `codex` (applies model policy keys)
+- Runs `omx-config-sync` before launching `codex` (enables multi-agent + installs research pipeline preset)
 - Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)
 - Skips frequent checks when within interval (default 15 min)
+
+Codex model policy (repo default):
+
+- Default/general/search: `gpt-5.2` + `model_reasoning_effort="medium"`
+- Planning (`codex-plan`): `gpt-5.2` + `model_reasoning_effort="xhigh"`
+- Implementation/review (`codex-code`): `gpt-5.3-codex` + `model_reasoning_effort="high"`
+- Per-host override file: `overlays/<server_id>/codex/model-policy.env`
+
+Examples:
+
+```bash
+codex-plan "API rollout plan 초안 잡아줘"
+codex-code "이 리팩토링 구현하고 테스트까지 돌려줘"
+```
 
 Environment variables:
 
@@ -80,7 +99,7 @@ Behavior:
 - Legacy flag-only interface (`dotfiles-sync --servers ...`) is removed
 - Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
 - Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
-- Runs `opencode-config-sync --force` after sync (host-aware source selection)
+- Runs `opencode-config-sync --force && codex-config-sync && omx-config-sync` after sync
 - If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`
 - Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails
 
@@ -91,7 +110,7 @@ Environment variables:
 - `DOTFILES_SYNC_CONTROLLER` (default: `false`)
 - `DOTFILES_SYNC_SSH_USER`, `DOTFILES_SYNC_SSH_PORT`, `DOTFILES_SYNC_SSH_IDENTITY` (keep in local env file, not in git)
 - `DOTFILES_SERVER_ID` (optional; fallback: `hostname -s`)
-- `DOTFILES_SYNC_POST_CMD` (default: `~/.local/bin/opencode-config-sync --force`)
+- `DOTFILES_SYNC_POST_CMD` (optional override; default runs repo scripts: `"<repo>/bin/opencode-config-sync" --force && "<repo>/bin/codex-config-sync" && "<repo>/bin/omx-config-sync"`)
 
 Recommended setup for multi-server:
 
@@ -133,6 +152,8 @@ dotfiles-sync validate --repo ~/dotfiles
 dotfiles-sync local --repo ~/dotfiles
 dotfiles-sync fanout --repo ~/dotfiles
 dotfiles-sync run --repo ~/dotfiles
+codex-config-sync --check
+omx-config-sync --check
 ```
 
 ## Post-Install

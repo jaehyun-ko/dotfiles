@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+get_server_id() {
+  if [[ -n "${DOTFILES_SERVER_ID:-}" ]]; then
+    printf '%s' "$DOTFILES_SERVER_ID"
+    return 0
+  fi
+  hostname -s 2>/dev/null || hostname
+}
+
+script_dir="$(resolve_script_dir)"
+dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+server_id="$(get_server_id)"
+policy_path="$dotfiles_dir/codex/model-policy.env"
+overlay_policy_path="$dotfiles_dir/overlays/$server_id/codex/model-policy.env"
+
+if [[ -f "$overlay_policy_path" ]]; then
+  policy_path="$overlay_policy_path"
+fi
+
+if [[ -f "$policy_path" ]]; then
+  # shellcheck disable=SC1090
+  source "$policy_path"
+fi
+
+plan_model="${PLAN_MODEL:-gpt-5.2}"
+plan_effort="${PLAN_REASONING_EFFORT:-xhigh}"
+codex_bin="${CODEX_BIN:-codex}"
+
+exec "$codex_bin" -m "$plan_model" -c "model_reasoning_effort=\"$plan_effort\"" -c "plan_mode_reasoning_effort=\"$plan_effort\"" "$@"

@@ -111,5 +111,7 @@ echo "[done] rollout finished successfully"
 Run this after rollout:
 
 ```bash
-DOTFILES_SYNC_CONTROLLER=true ~/.local/bin/dotfiles-sync run --repo ~/dotfiles --dry-run
+DOTFILES_SYNC_CONTROLLER=true ~/dotfiles/bin/dotfiles-sync run --repo ~/dotfiles --dry-run
+~/dotfiles/bin/codex-config-sync --check
+~/dotfiles/bin/omx-config-sync --check
 ```

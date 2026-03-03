@@ -413,6 +413,12 @@ validate_installation() {
         checks+=("⚠️  Codex CLI")
     fi
 
+    if command_exists_or_nvm omx; then
+        checks+=("✅ oh-my-codex (omx)")
+    else
+        checks+=("⚠️  oh-my-codex (omx)")
+    fi
+
     if command_exists_or_nvm oh-my-opencode; then
         checks+=("✅ oh-my-opencode")
     else
@@ -425,9 +431,9 @@ validate_installation() {
         checks+=("⚠️  OpenCode CLI")
     fi
 
-    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ] && [ -x "$HOME/.local/bin/opencode-config-sync" ] && [ -x "$HOME/.local/bin/opencode" ]; then
+    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ] && [ -x "$HOME/.local/bin/dotfiles-sync" ] && [ -x "$HOME/.local/bin/codex-config-sync" ] && [ -x "$HOME/.local/bin/omx-config-sync" ] && [ -x "$HOME/.local/bin/opencode-config-sync" ] && [ -x "$HOME/.local/bin/codex-plan" ] && [ -x "$HOME/.local/bin/codex-code" ] && [ -x "$HOME/.local/bin/opencode" ]; then
         checks+=("✅ codex/omo sync launchers")
-    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ] || [ -x "$HOME/.local/bin/opencode-config-sync" ] || [ -x "$HOME/.local/bin/opencode" ]; then
+    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ] || [ -x "$HOME/.local/bin/dotfiles-sync" ] || [ -x "$HOME/.local/bin/codex-config-sync" ] || [ -x "$HOME/.local/bin/omx-config-sync" ] || [ -x "$HOME/.local/bin/opencode-config-sync" ] || [ -x "$HOME/.local/bin/codex-plan" ] || [ -x "$HOME/.local/bin/codex-code" ] || [ -x "$HOME/.local/bin/opencode" ]; then
         checks+=("⚠️  codex/omo sync launchers (partial)")
     else
         checks+=("⚠️  codex/omo sync launchers")
