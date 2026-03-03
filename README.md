@@ -164,3 +164,4 @@ git config --global user.email "you@example.com"
 - Installer permissions: `chmod +x install.sh`
 - Skip Codex/OmO sync stack: `./install.sh --skip-codex-sync`
 - Skip dotfiles auto-update timer: `./install.sh --skip-dotfiles-autoupdate`
+- Chatbot auto-rollout guide: `CHATBOT_ROLLOUT.md`
