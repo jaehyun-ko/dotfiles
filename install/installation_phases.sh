@@ -214,7 +214,15 @@ phase6_configuration() {
         print_info "Skipping Claude Code configuration"
     fi
 
-    # 6.3 Codex/OmO sync stack
+    # 6.3 OpenCode configuration
+    echo
+    if is_opencode_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "OpenCode configuration already installed (auto-skip)"
+    else
+        install_opencode_config || print_warning "OpenCode config installation had issues"
+    fi
+
+    # 6.4 Codex/OmO sync stack
     echo
     if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
         print_info "Skipping Codex/OmO sync stack (--skip-codex-sync)"
@@ -224,7 +232,7 @@ phase6_configuration() {
         install_codex_omo_sync_stack || print_warning "Codex/OmO sync stack had issues"
     fi
 
-    # 6.4 Dotfiles auto-update timer
+    # 6.5 Dotfiles auto-update timer
     echo
     if [[ "$SKIP_DOTFILES_AUTO_UPDATE" == "true" ]]; then
         print_info "Skipping dotfiles auto-update timer (--skip-dotfiles-autoupdate)"
@@ -234,7 +242,7 @@ phase6_configuration() {
         install_dotfiles_auto_update_timer || print_warning "dotfiles auto-update timer had issues"
     fi
 
-    # 6.5 Change default shell (should be last)
+    # 6.6 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
 
@@ -399,24 +407,36 @@ validate_installation() {
         checks+=("⚠️  Rust/Cargo")
     fi
 
-    if command_exists codex; then
+    if command_exists_or_nvm codex; then
         checks+=("✅ Codex CLI")
     else
         checks+=("⚠️  Codex CLI")
     fi
 
-    if command_exists oh-my-opencode; then
+    if command_exists_or_nvm oh-my-opencode; then
         checks+=("✅ oh-my-opencode")
     else
         checks+=("⚠️  oh-my-opencode")
     fi
 
-    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ]; then
+    if is_native_opencode_cli_installed; then
+        checks+=("✅ OpenCode CLI")
+    else
+        checks+=("⚠️  OpenCode CLI")
+    fi
+
+    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ] && [ -x "$HOME/.local/bin/opencode-config-sync" ] && [ -x "$HOME/.local/bin/opencode" ]; then
         checks+=("✅ codex/omo sync launchers")
-    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ]; then
+    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ] || [ -x "$HOME/.local/bin/opencode-config-sync" ] || [ -x "$HOME/.local/bin/opencode" ]; then
         checks+=("⚠️  codex/omo sync launchers (partial)")
     else
         checks+=("⚠️  codex/omo sync launchers")
+    fi
+
+    if is_opencode_config_installed; then
+        checks+=("✅ OpenCode config")
+    else
+        checks+=("⚠️  OpenCode config")
     fi
 
     if is_dotfiles_auto_update_timer_ready; then

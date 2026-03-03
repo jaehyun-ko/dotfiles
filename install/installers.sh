@@ -555,6 +555,16 @@ install_pip_mirror() {
     if [[ "$use_kakao_mirror" != "true" ]]; then
         return 0
     fi
+
+    # Keep current setup when pip is already using Kakao mirror.
+    local pip_conf_files=("$HOME/.pip/pip.conf" "$HOME/.config/pip/pip.conf")
+    local pip_conf
+    for pip_conf in "${pip_conf_files[@]}"; do
+        if [ -f "$pip_conf" ] && grep -Eiq '^[[:space:]]*index-url[[:space:]]*=[[:space:]]*https?://mirror\.kakao\.com/pypi/simple/?([[:space:]]|$)' "$pip_conf"; then
+            print_status "pip mirror already set to Kakao; leaving as-is"
+            return 0
+        fi
+    done
     
     if [[ "$DRY_RUN" == "true" ]]; then
         print_debug "[DRY RUN] Would configure pip with Kakao mirror"
@@ -608,6 +618,83 @@ is_claude_config_installed() {
         return 0
     fi
     return 1
+}
+
+is_opencode_config_installed() {
+    local src_dir="$DOTFILES_DIR/opencode"
+    local dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+    local file
+    local files=("opencode.json" "oh-my-opencode.json")
+
+    for file in "${files[@]}"; do
+        local src="$src_dir/$file"
+        local dst="$dst_dir/$file"
+        if [ ! -f "$src" ]; then
+            return 1
+        fi
+        if [ ! -L "$dst" ] || [ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]; then
+            return 1
+        fi
+    done
+
+    return 0
+}
+
+install_opencode_config() {
+    local src_dir="$DOTFILES_DIR/opencode"
+    local dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+    local files=("opencode.json" "oh-my-opencode.json")
+    local file
+
+    if [ ! -d "$src_dir" ]; then
+        print_warning "OpenCode config source directory not found: $src_dir"
+        return 1
+    fi
+
+    if is_opencode_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "OpenCode configuration already installed (skipping)"
+        return 0
+    fi
+
+    print_info "Installing OpenCode configuration..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        for file in "${files[@]}"; do
+            print_debug "[DRY RUN] Would link $src_dir/$file -> $dst_dir/$file"
+        done
+        return 0
+    fi
+
+    mkdir -p "$dst_dir"
+
+    for file in "${files[@]}"; do
+        local src="$src_dir/$file"
+        local dst="$dst_dir/$file"
+
+        if [ ! -f "$src" ]; then
+            print_warning "OpenCode config file not found: $src"
+            continue
+        fi
+
+        if [ -f "$dst" ] && [ ! -L "$dst" ]; then
+            backup_file "$dst"
+        fi
+
+        if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
+            print_status "OpenCode config already linked: $dst"
+            continue
+        fi
+
+        rm -f "$dst"
+        ln -sf "$src" "$dst" || {
+            print_warning "Failed to link OpenCode config: $dst"
+            continue
+        }
+
+        print_status "Linked OpenCode config: $dst"
+    done
+
+    print_status "OpenCode configuration installed"
 }
 
 is_codex_sync_launcher_installed() {
@@ -754,7 +841,10 @@ is_codex_skill_sync_timer_ready() {
 }
 
 is_codex_omo_sync_stack_ready() {
-    if ! command_exists codex || ! command_exists oh-my-opencode; then
+    if ! is_native_opencode_cli_installed; then
+        return 1
+    fi
+    if ! command_exists_or_nvm codex || ! command_exists_or_nvm oh-my-opencode; then
         return 1
     fi
     if ! is_codex_sync_launcher_installed "codex-sync"; then
@@ -766,10 +856,26 @@ is_codex_omo_sync_stack_ready() {
     if ! is_codex_sync_launcher_installed "dotfiles-sync"; then
         return 1
     fi
+    if ! is_codex_sync_launcher_installed "opencode-config-sync"; then
+        return 1
+    fi
+    if ! is_codex_sync_launcher_installed "opencode"; then
+        return 1
+    fi
     if command_exists systemctl && ! is_codex_skill_sync_timer_ready; then
         return 1
     fi
     return 0
+}
+
+is_native_opencode_cli_installed() {
+    local candidate
+    for candidate in "$HOME"/.nvm/versions/node/*/bin/opencode; do
+        if [ -x "$candidate" ]; then
+            return 0
+        fi
+    done
+    return 1
 }
 
 is_dotfiles_auto_update_timer_ready() {
@@ -825,6 +931,25 @@ install_codex_cli() {
     print_status "Codex CLI installed"
 }
 
+install_opencode_cli() {
+    if is_native_opencode_cli_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
+        print_status "OpenCode CLI is already installed"
+        return 0
+    fi
+
+    print_info "Installing OpenCode CLI (opencode-ai)..."
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would install opencode-ai"
+        return 0
+    fi
+
+    run_npm_global_install "opencode-ai" || {
+        print_warning "Failed to install OpenCode CLI"
+        return 1
+    }
+    print_status "OpenCode CLI installed"
+}
+
 install_oh_my_opencode_cli() {
     if command_exists oh-my-opencode && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "oh-my-opencode is already installed"
@@ -846,7 +971,7 @@ install_oh_my_opencode_cli() {
 
 install_codex_sync_launchers() {
     print_info "Installing codex/omo sync launchers..."
-    local launchers=("codex-sync" "omo-sync" "dotfiles-sync")
+    local launchers=("codex-sync" "omo-sync" "dotfiles-sync" "opencode-config-sync" "opencode")
     local target_dir="$HOME/.local/bin"
 
     if [[ "$DRY_RUN" == "true" ]]; then
@@ -937,6 +1062,7 @@ install_codex_omo_sync_stack() {
     fi
     print_info "Installing Codex/OmO sync stack..."
     install_codex_cli || print_warning "Codex CLI install step had issues"
+    install_opencode_cli || print_warning "OpenCode CLI install step had issues"
     install_oh_my_opencode_cli || print_warning "oh-my-opencode install step had issues"
     install_codex_sync_launchers || print_warning "launcher installation had issues"
     install_codex_skill_sync_timer || print_warning "timer installation had issues"

@@ -69,12 +69,12 @@ export NVM_DIR="$HOME/.nvm"
 _lazy_load_nvm() {
   [ -s "$NVM_DIR/nvm.sh" ] || return 1
 
-  unset -f _lazy_load_nvm nvm node npm npx pnpm yarn corepack
+  unset -f _lazy_load_nvm nvm node npm npx pnpm yarn corepack codex oh-my-opencode omx
   . "$NVM_DIR/nvm.sh"
   [ -s "$NVM_DIR/bash_completion" ] && . "$NVM_DIR/bash_completion"
 }
 
-for cmd in nvm node npm npx pnpm yarn corepack; do
+for cmd in nvm node npm npx pnpm yarn corepack codex oh-my-opencode omx; do
   eval "$cmd() {
     if _lazy_load_nvm; then
       $cmd \"\$@\"
@@ -83,3 +83,22 @@ for cmd in nvm node npm npx pnpm yarn corepack; do
     fi
   }"
 done
+
+opencode() {
+  _lazy_load_nvm >/dev/null 2>&1 || true
+
+  local opencode_bin
+  opencode_bin="$(type -P opencode 2>/dev/null || true)"
+  if [ -n "$opencode_bin" ]; then
+    "$opencode_bin" "$@"
+    return
+  fi
+
+  if command -v oh-my-opencode >/dev/null 2>&1; then
+    command oh-my-opencode "$@"
+    return
+  fi
+
+  echo "opencode: command not found (install opencode or oh-my-opencode)" >&2
+  return 127
+}

@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF'
+Usage: opencode-config-sync [--check] [--force]
+
+Options:
+  --check     Validate links only, do not modify files
+  --force     Replace existing files/symlinks with managed symlinks
+  --help, -h  Show this help
+EOF
+}
+
+mode="sync"
+force="false"
+while (($# > 0)); do
+  case "$1" in
+    --check)
+      mode="check"
+      ;;
+    --force)
+      force="true"
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+script_dir="$(resolve_script_dir)"
+dotfiles_dir="$(cd "$script_dir/.." && pwd)"
+src_dir="${DOTFILES_OPENCODE_DIR:-$dotfiles_dir/opencode}"
+dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
+files=("opencode.json" "oh-my-opencode.json")
+
+if [[ "$mode" != "check" ]]; then
+  mkdir -p "$dst_dir"
+fi
+
+status=0
+for file in "${files[@]}"; do
+  src="$src_dir/$file"
+  dst="$dst_dir/$file"
+
+  if [ ! -f "$src" ]; then
+    echo "[error] missing source config: $src" >&2
+    status=1
+    continue
+  fi
+
+  if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
+    continue
+  fi
+
+  if [[ "$mode" == "check" ]]; then
+    echo "[missing] $dst -> $src" >&2
+    status=1
+    continue
+  fi
+
+  if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]; then
+    if [[ "$force" != "true" ]]; then
+      echo "[skip] keeping user symlink: $dst (use --force to relink)" >&2
+      continue
+    fi
+  fi
+
+  if [ -e "$dst" ] && [ ! -L "$dst" ]; then
+    if [[ "$force" != "true" ]]; then
+      echo "[skip] keeping existing file: $dst (use --force to relink)" >&2
+      continue
+    fi
+    backup="$dst.backup.$(date +%Y%m%d-%H%M%S)"
+    mv "$dst" "$backup"
+    echo "[backup] $dst -> $backup" >&2
+  fi
+
+  rm -f "$dst"
+  if ! ln -sf "$src" "$dst"; then
+    echo "[error] failed to link: $dst" >&2
+    status=1
+    continue
+  fi
+
+  echo "[ok] linked: $dst" >&2
+done
+
+exit "$status"

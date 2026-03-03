@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Prefer native OpenCode CLI when available (for commands like `auth login`).
+self="$(readlink -f "$0" 2>/dev/null || echo "$0")"
+while IFS= read -r candidate; do
+  [ -n "$candidate" ] || continue
+  candidate_real="$(readlink -f "$candidate" 2>/dev/null || echo "$candidate")"
+  if [ -x "$candidate" ] && [ "$candidate_real" != "$self" ]; then
+    exec "$candidate" "$@"
+  fi
+done < <(which -a opencode 2>/dev/null || true)
+
+if command -v omo-sync >/dev/null 2>&1; then
+  exec omo-sync "$@"
+fi
+
+if command -v oh-my-opencode >/dev/null 2>&1; then
+  exec oh-my-opencode "$@"
+fi
+
+echo "opencode: command not found (install oh-my-opencode or dotfiles sync launchers)" >&2
+exit 127

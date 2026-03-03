@@ -9,6 +9,7 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `tmux`: oh-my-tmux local configuration
 - `git`: template `.gitconfig` with practical defaults
 - `claude/`: Claude Code setup (`CLAUDE.md`, `ML-STACK.md`, `rules/`, `settings.json`)
+- `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
 - `install/`: reusable installer modules and phase orchestration
 
 ## Quick Start
@@ -28,7 +29,7 @@ Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 3. Shell environment setup
 4. Development tools installation
 5. System tools installation
-6. Final configuration (symlinks, optional Claude config, Codex/OmO sync, dotfiles auto-update, default shell)
+6. Final configuration (symlinks, optional Claude config, OpenCode config, Codex/OmO sync, dotfiles auto-update, default shell)
 
 ## Managed Dotfiles
 
@@ -45,13 +46,15 @@ The installer symlinks these files to `$HOME`:
 
 During install, it sets up:
 
-- `codex-sync`, `omo-sync`, `dotfiles-sync` launchers in `~/.local/bin/`
+- `codex-sync`, `omo-sync`, `dotfiles-sync`, `opencode-config-sync`, `opencode` launchers in `~/.local/bin/`
 - `agentic-skill-updater.timer` (user systemd, hourly)
-- Codex CLI / oh-my-opencode install attempts
+- Codex CLI / OpenCode CLI / oh-my-opencode install attempts
+- Symlinked OpenCode config files from repo to `~/.config/opencode/`
 
 Behavior:
 
 - Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
+- Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)
 - Skips frequent checks when within interval (default 15 min)
 
 Environment variables:
@@ -75,11 +78,26 @@ Behavior:
 
 - Runs `git pull --ff-only` on your dotfiles repo
 - Auto-skips update when the repo has local staged/unstaged/untracked changes
+- Pull-based model: each server updates its own local dotfiles repo (no rsync fan-out)
 
 Environment variables:
 
 - `DOTFILES_AUTO_UPDATE_REMOTE` (default: `origin`)
 - `DOTFILES_AUTO_UPDATE_BRANCH` (default: `main`)
+
+Recommended setup for multi-server:
+
+1. Clone this repo on each server to the same path (for example `~/dotfiles`).
+2. Run `./install.sh -y` once per server.
+3. Let each server's `dotfiles-auto-update.timer` pull updates independently.
+
+Example:
+
+```bash
+export DOTFILES_AUTO_UPDATE_REMOTE="origin"
+export DOTFILES_AUTO_UPDATE_BRANCH="main"
+./install.sh
+```
 
 ## Post-Install
 

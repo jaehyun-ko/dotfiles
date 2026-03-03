@@ -195,7 +195,7 @@ main() {
     print_info "  Phase 1: System Preparation (APT mirror, package manager update)"
     print_info "  Phase 2: Core Packages (basic, development, optional)"
     print_info "  Phase 3-5: Parallel Installation (shell, dev tools, system tools)"
-    print_info "  Phase 6: Configuration (symlinks, Claude config, Codex/OmO sync, dotfiles auto-update, shell setup)"
+    print_info "  Phase 6: Configuration (symlinks, Claude config, OpenCode config, Codex/OmO sync, dotfiles auto-update, shell setup)"
     echo
     
     if ! confirm "Proceed with installation?"; then

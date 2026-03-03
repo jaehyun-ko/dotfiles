@@ -101,6 +101,13 @@ configure_apt_mirror() {
         print_info "Skipping APT mirror configuration (--skip-mirror)"
         return 0
     fi
+
+    # Keep current setup when Kakao mirror is already configured.
+    local sources_file="/etc/apt/sources.list"
+    if [ -r "$sources_file" ] && grep -Eiq '^[[:space:]]*deb(-src)?[[:space:]]+https?://mirror\.kakao\.com/ubuntu/?([[:space:]]|$)' "$sources_file"; then
+        print_status "APT mirror already set to Kakao; leaving as-is"
+        return 0
+    fi
     
     print_info "Configuring APT mirror for faster downloads..."
     

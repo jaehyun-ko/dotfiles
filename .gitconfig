@@ -2,8 +2,8 @@
 # Update user.name and user.email after first install.
 
 [user]
-    name = Your Name
-    email = you@example.com
+	name = jaehyun-ko
+	email = jhko@sogang.ac.kr
 
 [core]
     editor = vim
