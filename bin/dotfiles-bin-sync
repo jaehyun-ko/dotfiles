@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF_HELP'
+Usage: dotfiles-bin-sync [--check]
+
+Ensure repo-managed launchers are linked into ~/.local/bin.
+
+Options:
+  --check     Validate links only, do not modify
+  --help, -h  Show this help
+EOF_HELP
+}
+
+mode="sync"
+while (($# > 0)); do
+  case "$1" in
+    --check)
+      mode="check"
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+script_dir="$(resolve_script_dir)"
+dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+target_dir="$HOME/.local/bin"
+
+launchers=(
+  # Node CLIs (NVM-aware wrappers)
+  codex
+  omx
+  oh-my-opencode
+
+  # Sync + helpers
+  dotfiles-sync
+  dotfiles-post-sync
+  dotfiles-bin-sync
+  dotfiles-systemd-sync
+
+  # Codex / OMX / OpenCode glue
+  codex-sync
+  omo-sync
+  codex-config-sync
+  omx-config-sync
+  opencode-config-sync
+  codex-plan
+  codex-code
+  opencode
+)
+
+status=0
+for name in "${launchers[@]}"; do
+  src="$dotfiles_dir/bin/$name"
+  dst="$target_dir/$name"
+
+  if [[ ! -f "$src" ]]; then
+    echo "[skip] launcher not found: $src" >&2
+    continue
+  fi
+
+  if [[ "$mode" == "check" ]]; then
+    if [[ -L "$dst" ]] && [[ "$(readlink "$dst" 2>/dev/null || true)" == "$src" ]]; then
+      continue
+    fi
+    echo "[missing] $dst -> $src" >&2
+    status=1
+    continue
+  fi
+
+  mkdir -p "$target_dir"
+  chmod +x "$src" 2>/dev/null || true
+  ln -sf "$src" "$dst" || {
+    echo "[error] failed to link: $dst" >&2
+    status=1
+    continue
+  }
+done
+
+exit "$status"
+

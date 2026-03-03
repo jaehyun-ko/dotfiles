@@ -16,8 +16,8 @@ resolve_script_dir() {
 
 script_dir="$(resolve_script_dir)"
 
+"$script_dir/dotfiles-bin-sync"
 "$script_dir/opencode-config-sync" --force
 "$script_dir/codex-config-sync"
 "$script_dir/omx-config-sync"
 "$script_dir/dotfiles-systemd-sync"
-

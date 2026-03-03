@@ -1011,6 +1011,7 @@ install_codex_sync_launchers() {
         "omo-sync"
         "dotfiles-sync"
         "dotfiles-post-sync"
+        "dotfiles-bin-sync"
         "dotfiles-systemd-sync"
         "codex-config-sync"
         "omx-config-sync"

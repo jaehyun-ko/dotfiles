@@ -49,7 +49,7 @@ The installer symlinks these files to `$HOME`:
 During install, it sets up:
 
 - NVM-aware CLI shims in `~/.local/bin/`: `codex`, `omx`, `oh-my-opencode`
-- Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
+- Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-bin-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
 - `agentic-skill-updater.timer` (user systemd, hourly)
 - Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
 - Symlinked OpenCode config files from repo to `~/.config/opencode/`
@@ -103,6 +103,7 @@ Behavior:
 - Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
 - Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
 - Runs `dotfiles-post-sync` after sync:
+  - `dotfiles-bin-sync` (self-heal `~/.local/bin` launcher links)
   - `opencode-config-sync --force`
   - `codex-config-sync`
   - `omx-config-sync`
