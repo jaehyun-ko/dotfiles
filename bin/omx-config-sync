@@ -69,6 +69,13 @@ toml_quote() {
   printf '"%s"' "$value"
 }
 
+toml_escape_value() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '%s' "$value"
+}
+
 ensure_section_kv() {
   local section="$1"
   local key="$2"
@@ -165,6 +172,99 @@ ensure_section_kv() {
   mv "$tmp" "$path"
 }
 
+ensure_toml_key_string() {
+  local key="$1"
+  local value="$2"
+  local path="$3"
+
+  local escaped expected_line tmp
+  escaped="$(toml_escape_value "$value")"
+  expected_line="$key = \"$escaped\""
+
+  if [[ "$mode" == "check" ]]; then
+    if ! awk -v key="$key" -v expected="$value" '
+      BEGIN { ok = 0; pattern = "^[[:space:]]*" key "[[:space:]]*=" }
+      {
+        if ($0 ~ pattern) {
+          line = $0
+          sub(/^[[:space:]]*[^=]+=[[:space:]]*/, "", line)
+          sub(/[[:space:]]*#.*/, "", line)
+          gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+          sub(/^"/, "", line)
+          sub(/"$/, "", line)
+          if (line == expected) ok = 1
+          exit
+        }
+      }
+      END { exit(ok ? 0 : 1) }
+    ' "$path"; then
+      echo "[missing] $path: $key -> \"$value\"" >&2
+      return 1
+    fi
+    return 0
+  fi
+
+  if grep -Eq "^[[:space:]]*${key}[[:space:]]*=" "$path"; then
+    tmp="$(mktemp)"
+    awk -v key="$key" -v line="$expected_line" '
+      BEGIN { pattern = "^[[:space:]]*" key "[[:space:]]*="; replaced = 0 }
+      {
+        if ($0 ~ pattern) {
+          if (replaced == 0) {
+            print line
+            replaced = 1
+          }
+          next
+        }
+        print
+      }
+      END {
+        if (replaced == 0) {
+          print line
+        }
+      }
+    ' "$path" >"$tmp"
+    mv "$tmp" "$path"
+    return 0
+  fi
+
+  tmp="$(mktemp)"
+  awk -v line="$expected_line" '
+    BEGIN { inserted = 0 }
+    {
+      if (inserted == 0 && $0 !~ /^[[:space:]]*#/ && $0 !~ /^[[:space:]]*$/) {
+        print line
+        inserted = 1
+      }
+      print
+    }
+    END {
+      if (inserted == 0) {
+        print line
+      }
+    }
+  ' "$path" >"$tmp"
+  mv "$tmp" "$path"
+}
+
+ensure_agent_model_policy() {
+  local agent_file="$1"
+  local model="$2"
+  local effort="$3"
+
+  if [[ ! -f "$agent_file" ]]; then
+    if [[ "$mode" == "check" ]]; then
+      echo "[missing] file: $agent_file" >&2
+      return 1
+    fi
+    echo "[warn] missing agent config, skipping: $agent_file" >&2
+    return 0
+  fi
+
+  ensure_toml_key_string "model" "$model" "$agent_file" || return 1
+  ensure_toml_key_string "model_reasoning_effort" "$effort" "$agent_file" || return 1
+}
+
 sync_file() {
   local src="$1"
   local dst="$2"
@@ -235,6 +335,18 @@ script_dir="$(resolve_script_dir)"
 dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
 server_id="$(get_server_id)"
 
+policy_path="$dotfiles_dir/codex/model-policy.env"
+overlay_policy_path="$dotfiles_dir/overlays/$server_id/codex/model-policy.env"
+if [[ -f "$overlay_policy_path" ]]; then
+  policy_path="$overlay_policy_path"
+fi
+if [[ -f "$policy_path" ]]; then
+  # shellcheck disable=SC1090
+  source "$policy_path"
+fi
+code_agent_model="${CODE_MODEL:-gpt-5.3-codex}"
+code_agent_effort="${CODE_REASONING_EFFORT:-xhigh}"
+
 agent_src="$dotfiles_dir/omx/agents/agentic-researcher.toml"
 agent_overlay="$dotfiles_dir/overlays/$server_id/omx/agents/agentic-researcher.toml"
 if [[ -f "$agent_overlay" ]]; then
@@ -281,6 +393,20 @@ ensure_section_kv "features" "child_agents_md" "true" "$config_path" || status=1
 
 ensure_section_kv "agents.\"agentic-researcher\"" "description" "$(toml_quote "Academic research pipeline (agentic-researcher)")" "$config_path" || status=1
 ensure_section_kv "agents.\"agentic-researcher\"" "config_file" "$(toml_quote "$agent_dst")" "$config_path" || status=1
+
+code_agent_files=(
+  "$HOME/.omx/agents/executor.toml"
+  "$HOME/.omx/agents/debugger.toml"
+  "$HOME/.omx/agents/build-fixer.toml"
+  "$HOME/.omx/agents/test-engineer.toml"
+  "$HOME/.omx/agents/qa-tester.toml"
+  "$HOME/.omx/agents/verifier.toml"
+  "$HOME/.omx/agents/code-reviewer.toml"
+)
+
+for agent_file in "${code_agent_files[@]}"; do
+  ensure_agent_model_policy "$agent_file" "$code_agent_model" "$code_agent_effort" || status=1
+done
 
 if [[ "$status" -eq 0 && "$mode" == "sync" ]]; then
   echo "[ok] synced OMX extensions (agentic-researcher + research-pipeline)" >&2

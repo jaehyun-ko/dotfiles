@@ -67,9 +67,9 @@ Behavior:
 
 Codex model policy (repo default):
 
-- Default/general/search: `gpt-5.2` + `model_reasoning_effort="medium"`
+- Default/general/search: `gpt-5.2` + `model_reasoning_effort="xhigh"`
 - Planning (`codex-plan`): `gpt-5.2` + `model_reasoning_effort="xhigh"`
-- Implementation/review (`codex-code`): `gpt-5.3-codex` + `model_reasoning_effort="high"`
+- Implementation/review (`codex-code`): `gpt-5.3-codex` + `model_reasoning_effort="xhigh"`
 - Per-host override file: `overlays/<server_id>/codex/model-policy.env`
 
 Examples:
