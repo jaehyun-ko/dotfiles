@@ -37,7 +37,7 @@ if [[ -f "$policy_path" ]]; then
   source "$policy_path"
 fi
 
-plan_model="${PLAN_MODEL:-gpt-5.2}"
+plan_model="${PLAN_MODEL:-gpt-5.4}"
 plan_effort="${PLAN_REASONING_EFFORT:-xhigh}"
 codex_bin="${CODEX_BIN:-codex}"
 
