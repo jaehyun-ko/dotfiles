@@ -134,6 +134,74 @@ ensure_toml_key() {
   mv "$tmp" "$path"
 }
 
+sync_multiline_toml_key_from_file() {
+  local key="$1"
+  local value_file="$2"
+  local path="$3"
+
+  if [[ ! -f "$value_file" ]]; then
+    echo "[error] missing multiline value file: $value_file" >&2
+    return 1
+  fi
+
+  if ! node - "$mode" "$key" "$value_file" "$path" <<'EOF_NODE'
+const fs = require('fs');
+
+const [, , mode, key, valueFile, configPath] = process.argv;
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalize(value) {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+const desired = normalize(fs.readFileSync(valueFile, 'utf8')).replace(/\n$/, '');
+if (desired.includes("'''")) {
+  console.error(`[error] ${valueFile} contains an unsupported TOML literal delimiter`);
+  process.exit(1);
+}
+
+const original = normalize(fs.readFileSync(configPath, 'utf8'));
+const pattern = new RegExp(
+  `^\\s*${escapeRegex(key)}\\s*=\\s*(['"]{3})\\n([\\s\\S]*?)\\n\\1`,
+  'm',
+);
+const match = original.match(pattern);
+
+if (mode === 'check') {
+  if (!match || match[2] !== desired) {
+    console.error(`[missing] ${key} -> ${valueFile}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+const replacement = `${key} = '''\n${desired}\n'''`;
+let updated = original;
+
+if (match) {
+  updated = original.replace(pattern, replacement);
+} else {
+  const sectionMatch = original.match(/^\[[^\n]+\]/m);
+  if (sectionMatch && sectionMatch.index !== undefined) {
+    updated = `${original.slice(0, sectionMatch.index)}${replacement}\n\n${original.slice(sectionMatch.index)}`;
+  } else {
+    const trimmed = original.replace(/\s*$/, '');
+    updated = trimmed ? `${trimmed}\n\n${replacement}\n` : `${replacement}\n`;
+  }
+}
+
+if (updated !== original) {
+  fs.writeFileSync(configPath, updated);
+}
+EOF_NODE
+  then
+    return 1
+  fi
+}
+
 script_dir="$(resolve_script_dir)"
 dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
 server_id="$(get_server_id)"
@@ -145,8 +213,18 @@ if [[ -f "$overlay_policy_path" ]]; then
   policy_path="$overlay_policy_path"
 fi
 
+developer_instructions_path="$dotfiles_dir/codex/developer-instructions.txt"
+developer_instructions_overlay="$dotfiles_dir/overlays/$server_id/codex/developer-instructions.txt"
+if [[ -f "$developer_instructions_overlay" ]]; then
+  developer_instructions_path="$developer_instructions_overlay"
+fi
+
 if [[ ! -f "$policy_path" ]]; then
   echo "[error] missing policy file: $policy_path" >&2
+  exit 1
+fi
+if [[ ! -f "$developer_instructions_path" ]]; then
+  echo "[error] missing developer instructions file: $developer_instructions_path" >&2
   exit 1
 fi
 
@@ -174,6 +252,7 @@ status=0
 ensure_toml_key "model" "$DEFAULT_MODEL" "$config_path" || status=1
 ensure_toml_key "model_reasoning_effort" "$DEFAULT_REASONING_EFFORT" "$config_path" || status=1
 ensure_toml_key "plan_mode_reasoning_effort" "$PLAN_REASONING_EFFORT" "$config_path" || status=1
+sync_multiline_toml_key_from_file "developer_instructions" "$developer_instructions_path" "$config_path" || status=1
 
 if [[ "$status" -eq 0 && "$mode" == "sync" ]]; then
   echo "[ok] synced codex model policy: $config_path" >&2
