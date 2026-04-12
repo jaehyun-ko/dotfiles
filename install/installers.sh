@@ -359,7 +359,11 @@ install_claude_config() {
     fi
 
     # Skip if already fully configured
-    if [[ "$FORCE_INSTALL" != "true" ]] && [ -L "$HOME/.claude/CLAUDE.md" ] && [ -L "$HOME/.claude/rules" ]; then
+    if [[ "$FORCE_INSTALL" != "true" ]] \
+        && [ -L "$HOME/.claude/CLAUDE.md" ] \
+        && [ -L "$HOME/.claude/settings.json" ] \
+        && [ -L "$HOME/.claude/commands" ] \
+        && [ -L "$HOME/.claude/hooks" ]; then
         local current_target
         current_target="$(readlink -f "$HOME/.claude/CLAUDE.md" 2>/dev/null)"
         local expected_target
@@ -609,7 +613,10 @@ resolve_agentic_researcher_repo() {
 }
 
 is_claude_config_installed() {
-    if [ -L "$HOME/.claude/CLAUDE.md" ] && [ -L "$HOME/.claude/rules" ]; then
+    if [ -L "$HOME/.claude/CLAUDE.md" ] \
+        && [ -L "$HOME/.claude/settings.json" ] \
+        && [ -L "$HOME/.claude/commands" ] \
+        && [ -L "$HOME/.claude/hooks" ]; then
         return 0
     fi
     return 1

@@ -8,7 +8,7 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `bash`: oh-my-bash + shared aliases + lazy nvm loading
 - `tmux`: oh-my-tmux local configuration
 - `git`: template `.gitconfig` with practical defaults
-- `claude/`: Claude Code setup (`CLAUDE.md`, `ML-STACK.md`, `rules/`, `settings.json`)
+- `claude/`: Claude Code setup (`CLAUDE.md`, `settings.json`, commands, hooks)
 - `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
 - `codex/`: Codex model routing policy (`model-policy.env`)
 - `omx/`: OMX extensions (native agent + workflow skill presets)
@@ -184,7 +184,7 @@ git config --global user.email "you@example.com"
 1. Edit shared aliases in `aliases.sh`.
 2. Edit package/tool URL lists in `install/config.sh`.
 3. Adjust shell plugins directly in `.zshrc` or `.bashrc`.
-4. Customize Claude Code rules under `claude/rules/`.
+4. Customize Claude Code config under `claude/`.
 
 ## Troubleshooting
 

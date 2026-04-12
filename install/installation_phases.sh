@@ -454,7 +454,7 @@ validate_installation() {
     fi
 
     # Check Claude config
-    if [ -d "$HOME/.claude" ] && [ -L "$HOME/.claude/rules" ]; then
+    if is_claude_config_installed; then
         checks+=("✅ Claude Code Config")
     elif [ -d "$HOME/.claude" ]; then
         checks+=("⚠️  Claude Code Config (partial)")
