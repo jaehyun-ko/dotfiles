@@ -254,6 +254,10 @@ sync_git_repo_force() {
     echo "[dry-run] would run: git -C \"$repo\" reset --hard \"$DOTFILES_REMOTE/$DOTFILES_BRANCH\""
     echo "[dry-run] would run: git -C \"$repo\" clean -fd"
     echo "[dry-run] would run: git -C \"$repo\" pull --ff-only \"$DOTFILES_REMOTE\" \"$DOTFILES_BRANCH\""
+    if [[ -f "$repo/.gitmodules" ]]; then
+      echo "[dry-run] would run: git -C \"$repo\" submodule sync --recursive"
+      echo "[dry-run] would run: git -C \"$repo\" submodule update --init --recursive"
+    fi
     return 0
   fi
 
@@ -268,6 +272,10 @@ sync_git_repo_force() {
   git -C "$repo" reset --hard "$DOTFILES_REMOTE/$DOTFILES_BRANCH"
   git -C "$repo" clean -fd
   git -C "$repo" pull --ff-only "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"
+  if [[ -f "$repo/.gitmodules" ]]; then
+    git -C "$repo" submodule sync --recursive
+    git -C "$repo" submodule update --init --recursive
+  fi
 
   after="$(git -C "$repo" rev-parse --short HEAD)"
   if [[ "$before" == "$after" ]]; then

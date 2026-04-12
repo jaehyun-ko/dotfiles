@@ -101,6 +101,7 @@ Behavior:
 - Uses `dotfiles-sync run` (subcommand CLI)
 - Legacy flag-only interface (`dotfiles-sync --servers ...`) is removed
 - Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
+- Submodules are synced to the committed gitlinks after local sync
 - Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
 - Runs `dotfiles-post-sync` after sync:
   - `dotfiles-bin-sync` (self-heal `~/.local/bin` launcher links)
