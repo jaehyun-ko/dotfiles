@@ -208,7 +208,7 @@ phase6_configuration() {
     echo
     if is_claude_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "Claude Code configuration already installed (auto-skip)"
-    elif confirm "Install Claude Code configuration? (ML stack guide + Kosmos rules)"; then
+    elif confirm "Install Claude Code model-only configuration?"; then
         install_claude_config || print_warning "Claude config installation had issues"
     else
         print_info "Skipping Claude Code configuration"

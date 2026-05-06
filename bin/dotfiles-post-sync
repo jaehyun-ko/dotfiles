@@ -17,6 +17,9 @@ resolve_script_dir() {
 script_dir="$(resolve_script_dir)"
 
 "$script_dir/dotfiles-bin-sync"
+if [[ -x "$script_dir/../claude/install.sh" ]]; then
+  "$script_dir/../claude/install.sh"
+fi
 "$script_dir/opencode-config-sync" --force
 "$script_dir/codex-config-sync"
 "$script_dir/omx-config-sync"

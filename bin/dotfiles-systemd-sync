@@ -7,7 +7,6 @@ Usage: dotfiles-systemd-sync [--check]
 
 Sync repo-managed user systemd units:
   - dotfiles-auto-update.timer/service
-  - agentic-skill-updater.timer/service (optional)
 
 Options:
   --check     Validate files only, do not modify
@@ -150,6 +149,27 @@ sync_unit_pair() {
   return 0
 }
 
+remove_unit_pair() {
+  local service_name="$1"
+  local timer_name="$2"
+  local user_dir="$3"
+  local status=0
+
+  if [[ "$mode" == "check" ]]; then
+    for unit in "$service_name" "$timer_name"; do
+      if [[ -e "$user_dir/$unit" || -L "$user_dir/$unit" ]]; then
+        echo "[stale] $user_dir/$unit" >&2
+        status=1
+      fi
+    done
+    return "$status"
+  fi
+
+  systemctl --user disable --now "$timer_name" >/dev/null 2>&1 || true
+  rm -f "$user_dir/$service_name" "$user_dir/$timer_name"
+  systemctl --user daemon-reload >/dev/null 2>&1 || true
+}
+
 main() {
   local script_dir dotfiles_dir user_dir
   script_dir="$(resolve_script_dir)"
@@ -174,31 +194,12 @@ main() {
     "$user_dir/dotfiles-auto-update.timer" \
     "__DOTFILES_DIR__=$dotfiles_dir" || status=1
 
-  # agentic skill updater is optional (requires the repo to exist).
-  local agentic_repo="${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
-  if [[ -f "$agentic_repo/scripts/skill_autoupdate.py" ]]; then
-    local channel="${SKILL_SYNC_CHANNEL:-stable}"
-    local canary="${SKILL_SYNC_CANARY_PERCENT:-10}"
-    local install_root="${SKILL_SYNC_INSTALL_ROOT:-$HOME/.codex/skills}"
-    local skill_name="${SKILL_SYNC_SKILL_NAME:-agentic-researcher}"
-
-    sync_unit_pair \
-      "agentic-skill-updater.timer" \
-      "$dotfiles_dir/systemd/user/agentic-skill-updater.service" \
-      "$dotfiles_dir/systemd/user/agentic-skill-updater.timer" \
-      "$user_dir/agentic-skill-updater.service" \
-      "$user_dir/agentic-skill-updater.timer" \
-      "__REPO_DIR__=$agentic_repo" \
-      "__CHANNEL__=$channel" \
-      "__CANARY_PERCENT__=$canary" \
-      "__INSTALL_ROOT__=$install_root" \
-      "__SKILL_NAME__=$skill_name" || status=1
-  else
-    echo "[skip] agentic-researcher repo not found; skipping skill-updater timer" >&2
-  fi
+  remove_unit_pair \
+    "agentic-skill-updater.service" \
+    "agentic-skill-updater.timer" \
+    "$user_dir" || status=1
 
   return "$status"
 }
 
 main "$@"
-

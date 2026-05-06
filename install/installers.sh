@@ -358,16 +358,13 @@ install_claude_config() {
         return 1
     fi
 
-    # Skip if already fully configured
+    # Skip if already configured
     if [[ "$FORCE_INSTALL" != "true" ]] \
-        && [ -L "$HOME/.claude/CLAUDE.md" ] \
-        && [ -L "$HOME/.claude/settings.json" ] \
-        && [ -L "$HOME/.claude/commands" ] \
-        && [ -L "$HOME/.claude/hooks" ]; then
+        && [ -L "$HOME/.claude/settings.json" ]; then
         local current_target
-        current_target="$(readlink -f "$HOME/.claude/CLAUDE.md" 2>/dev/null)"
+        current_target="$(readlink -f "$HOME/.claude/settings.json" 2>/dev/null)"
         local expected_target
-        expected_target="$(readlink -f "$claude_dir/CLAUDE.md" 2>/dev/null)"
+        expected_target="$(readlink -f "$claude_dir/settings.json" 2>/dev/null)"
         if [ "$current_target" = "$expected_target" ]; then
             print_status "Claude Code configuration already installed (skipping)"
             return 0
@@ -596,27 +593,8 @@ EOF
     fi
 }
 
-resolve_agentic_researcher_repo() {
-    local candidates=(
-        "${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
-        "$HOME/agentic-researcher"
-        "$HOME/work/agentic-researcher"
-    )
-    local path
-    for path in "${candidates[@]}"; do
-        if [ -f "$path/scripts/skill_autoupdate.py" ]; then
-            echo "$path"
-            return 0
-        fi
-    done
-    return 1
-}
-
 is_claude_config_installed() {
-    if [ -L "$HOME/.claude/CLAUDE.md" ] \
-        && [ -L "$HOME/.claude/settings.json" ] \
-        && [ -L "$HOME/.claude/commands" ] \
-        && [ -L "$HOME/.claude/hooks" ]; then
+    if [ -L "$HOME/.claude/settings.json" ]; then
         return 0
     fi
     return 1
@@ -820,33 +798,6 @@ install_user_timer() {
     print_status "Installed and enabled $unit_name"
 }
 
-is_codex_skill_sync_timer_ready() {
-    if ! command_exists systemctl; then
-        return 1
-    fi
-
-    local repo_path
-    repo_path="$(resolve_agentic_researcher_repo 2>/dev/null || true)"
-
-    if [ -z "$repo_path" ]; then
-        return 1
-    fi
-
-    local user_dir
-    user_dir="$(systemd_user_dir)"
-    is_user_timer_ready \
-        "agentic-skill-updater.timer" \
-        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.service" \
-        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer" \
-        "$user_dir/agentic-skill-updater.service" \
-        "$user_dir/agentic-skill-updater.timer" \
-        "__REPO_DIR__=$repo_path" \
-        "__CHANNEL__=$SKILL_SYNC_CHANNEL" \
-        "__CANARY_PERCENT__=$SKILL_SYNC_CANARY_PERCENT" \
-        "__INSTALL_ROOT__=$SKILL_SYNC_INSTALL_ROOT" \
-        "__SKILL_NAME__=$SKILL_SYNC_SKILL_NAME"
-}
-
 is_codex_omo_sync_stack_ready() {
     if ! is_native_opencode_cli_installed; then
         return 1
@@ -879,9 +830,6 @@ is_codex_omo_sync_stack_ready() {
         return 1
     fi
     if ! is_codex_sync_launcher_installed "opencode"; then
-        return 1
-    fi
-    if command_exists systemctl && ! is_codex_skill_sync_timer_ready; then
         return 1
     fi
     return 0
@@ -1058,37 +1006,6 @@ install_codex_sync_launchers() {
     done
 }
 
-install_codex_skill_sync_timer() {
-    print_info "Installing user systemd timer for skill sync..."
-
-    if ! command_exists systemctl; then
-        print_warning "systemctl not found; skipping timer installation"
-        return 0
-    fi
-
-    local repo_path
-    repo_path="$(resolve_agentic_researcher_repo 2>/dev/null || true)"
-    if [ -z "$repo_path" ]; then
-        print_warning "agentic-researcher repo not found; skipping timer installation"
-        print_info "Set AGENTIC_RESEARCHER_REPO and rerun install if needed"
-        return 0
-    fi
-
-    local user_dir
-    user_dir="$(systemd_user_dir)"
-    install_user_timer \
-        "agentic-skill-updater.timer" \
-        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.service" \
-        "$DOTFILES_DIR/systemd/user/agentic-skill-updater.timer" \
-        "$user_dir/agentic-skill-updater.service" \
-        "$user_dir/agentic-skill-updater.timer" \
-        "__REPO_DIR__=$repo_path" \
-        "__CHANNEL__=$SKILL_SYNC_CHANNEL" \
-        "__CANARY_PERCENT__=$SKILL_SYNC_CANARY_PERCENT" \
-        "__INSTALL_ROOT__=$SKILL_SYNC_INSTALL_ROOT" \
-        "__SKILL_NAME__=$SKILL_SYNC_SKILL_NAME"
-}
-
 install_dotfiles_auto_update_timer() {
     print_info "Installing dotfiles auto-update timer..."
 
@@ -1119,6 +1036,5 @@ install_codex_omo_sync_stack() {
     install_opencode_cli || print_warning "OpenCode CLI install step had issues"
     install_oh_my_opencode_cli || print_warning "oh-my-opencode install step had issues"
     install_codex_sync_launchers || print_warning "launcher installation had issues"
-    install_codex_skill_sync_timer || print_warning "timer installation had issues"
     print_status "Codex/OmO sync stack setup completed"
 }

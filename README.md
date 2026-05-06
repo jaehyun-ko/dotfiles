@@ -8,10 +8,9 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `bash`: oh-my-bash + shared aliases + lazy nvm loading
 - `tmux`: oh-my-tmux local configuration
 - `git`: template `.gitconfig` with practical defaults
-- `claude/`: Claude Code setup (`CLAUDE.md`, `settings.json`, commands, hooks)
+- `claude/`: Claude Code model-only setup (`settings.json`)
 - `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
-- `codex/`: Codex model routing policy (`model-policy.env`)
-- `omx/`: OMX extensions (native agent + workflow skill presets)
+- `codex/`: Codex model-only policy (`model-policy.env`)
 - `install/`: reusable installer modules and phase orchestration
 
 ## Quick Start
@@ -50,26 +49,22 @@ During install, it sets up:
 
 - NVM-aware CLI shims in `~/.local/bin/`: `codex`, `omx`, `oh-my-opencode`
 - Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-bin-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
-- `agentic-skill-updater.timer` (user systemd, hourly)
 - Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
 - Symlinked OpenCode config files from repo to `~/.config/opencode/`
 - Managed Codex model policy sync into `~/.codex/config.toml`
 
 Behavior:
 
-- Runs `agentic-researcher` skill sync before launching `codex`/`oh-my-opencode`
-- Single source of truth for the research workflow: `~/.codex/skills/agentic-researcher/SKILL.md`
-  - The repo-managed `omx/` pieces (`agentic-researcher` agent + `research-pipeline` skill) are intentionally thin wrappers.
-- Runs `codex-config-sync` before launching `codex` (applies model policy keys)
-- Runs `omx-config-sync` before launching `codex` (enables multi-agent + installs research pipeline preset)
+- Runs `codex-config-sync` before launching `codex` (applies model policy keys and removes custom developer instructions)
+- Runs `omx-config-sync` during post-sync as a cleanup step for legacy prompt/agent/skill wiring
 - Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)
 - Skips frequent checks when within interval (default 15 min)
 
 Codex model policy (repo default):
 
-- Default/general/search: `gpt-5.4` + `model_reasoning_effort="xhigh"`
-- Planning (`codex-plan`): `gpt-5.4` + `model_reasoning_effort="xhigh"`
-- Implementation/review (`codex-code`): `gpt-5.3-codex` + `model_reasoning_effort="xhigh"`
+- Default/general/search: `gpt-5.5` + `model_reasoning_effort="xhigh"`
+- Planning (`codex-plan`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
+- Implementation/review (`codex-code`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
 - Per-host override file: `overlays/<server_id>/codex/model-policy.env`
 
 Examples:
@@ -78,16 +73,6 @@ Examples:
 codex-plan "API rollout plan 초안 잡아줘"
 codex-code "이 리팩토링 구현하고 테스트까지 돌려줘"
 ```
-
-Environment variables:
-
-- `AGENTIC_RESEARCHER_REPO` (default: `~/projects/agentic-researcher`)
-- `SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES` (default: `15`)
-- `SKILL_SYNC_NO_PULL=1` (skip `git pull` in launch-time sync)
-- `SKILL_SYNC_CHANNEL` (`stable`/`canary`)
-- `SKILL_SYNC_CANARY_PERCENT`
-- `SKILL_SYNC_INSTALL_ROOT`
-- `SKILL_SYNC_SKILL_NAME`
 
 ## Dotfiles Auto-Update
 
@@ -107,7 +92,7 @@ Behavior:
   - `dotfiles-bin-sync` (self-heal `~/.local/bin` launcher links)
   - `opencode-config-sync --force`
   - `codex-config-sync`
-  - `omx-config-sync`
+  - `omx-config-sync` (legacy prompt/agent/skill cleanup)
   - `dotfiles-systemd-sync` (keeps user timers up to date + enables linger best-effort)
 - If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`
 - Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails
@@ -185,7 +170,7 @@ git config --global user.email "you@example.com"
 1. Edit shared aliases in `aliases.sh`.
 2. Edit package/tool URL lists in `install/config.sh`.
 3. Adjust shell plugins directly in `.zshrc` or `.bashrc`.
-4. Customize Claude Code config under `claude/`.
+4. Adjust Claude Code model selection in `claude/settings.json`.
 
 ## Troubleshooting
 

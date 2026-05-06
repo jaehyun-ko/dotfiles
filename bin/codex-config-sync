@@ -202,6 +202,44 @@ EOF_NODE
   fi
 }
 
+remove_toml_key() {
+  local key="$1"
+  local path="$2"
+
+  node - "$mode" "$key" "$path" <<'EOF_NODE'
+const fs = require('fs');
+
+const [, , mode, key, configPath] = process.argv;
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalize(value) {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+const original = normalize(fs.readFileSync(configPath, 'utf8'));
+const keyPattern = escapeRegex(key);
+const multiline = new RegExp(`^\\s*${keyPattern}\\s*=\\s*(['"]{3})\\n[\\s\\S]*?\\n\\1\\n?`, 'm');
+const singleline = new RegExp(`^\\s*${keyPattern}\\s*=.*\\n?`, 'm');
+let updated = original.replace(multiline, '').replace(singleline, '');
+updated = updated.replace(/\n{3,}/g, '\n\n');
+
+if (mode === 'check') {
+  if (updated !== original) {
+    console.error(`[stale] remove ${key}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (updated !== original) {
+  fs.writeFileSync(configPath, updated);
+}
+EOF_NODE
+}
+
 script_dir="$(resolve_script_dir)"
 dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
 server_id="$(get_server_id)"
@@ -213,18 +251,8 @@ if [[ -f "$overlay_policy_path" ]]; then
   policy_path="$overlay_policy_path"
 fi
 
-developer_instructions_path="$dotfiles_dir/codex/developer-instructions.txt"
-developer_instructions_overlay="$dotfiles_dir/overlays/$server_id/codex/developer-instructions.txt"
-if [[ -f "$developer_instructions_overlay" ]]; then
-  developer_instructions_path="$developer_instructions_overlay"
-fi
-
 if [[ ! -f "$policy_path" ]]; then
   echo "[error] missing policy file: $policy_path" >&2
-  exit 1
-fi
-if [[ ! -f "$developer_instructions_path" ]]; then
-  echo "[error] missing developer instructions file: $developer_instructions_path" >&2
   exit 1
 fi
 
@@ -252,10 +280,10 @@ status=0
 ensure_toml_key "model" "$DEFAULT_MODEL" "$config_path" || status=1
 ensure_toml_key "model_reasoning_effort" "$DEFAULT_REASONING_EFFORT" "$config_path" || status=1
 ensure_toml_key "plan_mode_reasoning_effort" "$PLAN_REASONING_EFFORT" "$config_path" || status=1
-sync_multiline_toml_key_from_file "developer_instructions" "$developer_instructions_path" "$config_path" || status=1
+remove_toml_key "developer_instructions" "$config_path" || status=1
 
 if [[ "$status" -eq 0 && "$mode" == "sync" ]]; then
-  echo "[ok] synced codex model policy: $config_path" >&2
+  echo "[ok] synced codex model-only policy: $config_path" >&2
 fi
 
 exit "$status"

@@ -86,13 +86,7 @@ export MIRROR_LOCATION="${MIRROR_LOCATION:-}"  # Force specific mirror location 
 export SKIP_CODEX_SYNC_STACK="${SKIP_CODEX_SYNC_STACK:-false}"  # Skip codex/omo sync setup
 export SKIP_DOTFILES_AUTO_UPDATE="${SKIP_DOTFILES_AUTO_UPDATE:-false}"  # Skip dotfiles auto update timer
 
-# Codex/OmO + skill sync defaults
-export AGENTIC_RESEARCHER_REPO="${AGENTIC_RESEARCHER_REPO:-$HOME/projects/agentic-researcher}"
-export SKILL_SYNC_CHANNEL="${SKILL_SYNC_CHANNEL:-stable}"
-export SKILL_SYNC_CANARY_PERCENT="${SKILL_SYNC_CANARY_PERCENT:-10}"
-export SKILL_SYNC_INSTALL_ROOT="${SKILL_SYNC_INSTALL_ROOT:-$HOME/.codex/skills}"
-export SKILL_SYNC_SKILL_NAME="${SKILL_SYNC_SKILL_NAME:-agentic-researcher}"
-export SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES="${SKILL_SYNC_MIN_CHECK_INTERVAL_MINUTES:-15}"
+# Dotfiles sync defaults
 export DOTFILES_AUTO_UPDATE_REMOTE="${DOTFILES_AUTO_UPDATE_REMOTE:-origin}"
 export DOTFILES_AUTO_UPDATE_BRANCH="${DOTFILES_AUTO_UPDATE_BRANCH:-main}"
 

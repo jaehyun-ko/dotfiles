@@ -37,7 +37,7 @@ if [[ -f "$policy_path" ]]; then
   source "$policy_path"
 fi
 
-code_model="${CODE_MODEL:-gpt-5.3-codex}"
+code_model="${CODE_MODEL:-gpt-5.5}"
 code_effort="${CODE_REASONING_EFFORT:-high}"
 codex_bin="${CODEX_BIN:-codex}"
 
