@@ -240,6 +240,114 @@ if (updated !== original) {
 EOF_NODE
 }
 
+ensure_toml_section_bool_key() {
+  local section="$1"
+  local key="$2"
+  local value="$3"
+  local path="$4"
+
+  case "$value" in
+    true|false)
+      ;;
+    *)
+      echo "[error] $section.$key must be true or false, got: $value" >&2
+      return 1
+      ;;
+  esac
+
+  node - "$mode" "$section" "$key" "$value" "$path" <<'EOF_NODE'
+const fs = require('fs');
+
+const [, , mode, section, key, value, configPath] = process.argv;
+const expectedLine = `${key} = ${value}`;
+
+function escapeRegex(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalize(value) {
+  return value.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+}
+
+const original = normalize(fs.readFileSync(configPath, 'utf8'));
+const hadTrailingNewline = original.endsWith('\n');
+const lines = original.split('\n');
+if (hadTrailingNewline) {
+  lines.pop();
+}
+
+const output = [];
+let inTargetSection = false;
+let foundTargetSection = false;
+let insertedInTargetSection = false;
+let changed = false;
+const headerPattern = /^\s*\[([^\]]+)\]\s*$/;
+const keyPattern = new RegExp(`^\\s*${escapeRegex(key)}\\s*=`);
+
+function closeTargetSectionIfNeeded() {
+  if (inTargetSection && !insertedInTargetSection) {
+    output.push(expectedLine);
+    insertedInTargetSection = true;
+    changed = true;
+  }
+}
+
+for (const line of lines) {
+  const header = line.match(headerPattern);
+  if (header) {
+    closeTargetSectionIfNeeded();
+    inTargetSection = header[1] === section;
+    if (inTargetSection) {
+      foundTargetSection = true;
+      insertedInTargetSection = false;
+    }
+    output.push(line);
+    continue;
+  }
+
+  if (inTargetSection && keyPattern.test(line)) {
+    if (!insertedInTargetSection) {
+      output.push(expectedLine);
+      insertedInTargetSection = true;
+    }
+    if (line.trim() !== expectedLine) {
+      changed = true;
+    }
+    continue;
+  }
+
+  output.push(line);
+}
+
+closeTargetSectionIfNeeded();
+
+if (!foundTargetSection) {
+  if (output.length > 0 && output[output.length - 1] !== '') {
+    output.push('');
+  }
+  output.push(`[${section}]`, expectedLine);
+  changed = true;
+}
+
+let updated = output.join('\n').replace(/\n{3,}/g, '\n\n');
+if (hadTrailingNewline || updated) {
+  updated += '\n';
+}
+
+if (mode === 'check') {
+  if (changed || updated !== original) {
+    console.error(`[missing] [${section}].${key} -> ${value}`);
+    process.exit(1);
+  }
+  process.exit(0);
+}
+
+if (updated !== original) {
+  fs.writeFileSync(configPath, updated);
+}
+EOF_NODE
+}
+
 script_dir="$(resolve_script_dir)"
 dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
 server_id="$(get_server_id)"
@@ -258,6 +366,8 @@ fi
 
 # shellcheck disable=SC1090
 source "$policy_path"
+
+CODEX_FEATURE_GOALS="${CODEX_FEATURE_GOALS:-true}"
 
 ensure_var "DEFAULT_MODEL"
 ensure_var "DEFAULT_REASONING_EFFORT"
@@ -280,10 +390,11 @@ status=0
 ensure_toml_key "model" "$DEFAULT_MODEL" "$config_path" || status=1
 ensure_toml_key "model_reasoning_effort" "$DEFAULT_REASONING_EFFORT" "$config_path" || status=1
 ensure_toml_key "plan_mode_reasoning_effort" "$PLAN_REASONING_EFFORT" "$config_path" || status=1
+ensure_toml_section_bool_key "features" "goals" "$CODEX_FEATURE_GOALS" "$config_path" || status=1
 remove_toml_key "developer_instructions" "$config_path" || status=1
 
 if [[ "$status" -eq 0 && "$mode" == "sync" ]]; then
-  echo "[ok] synced codex model-only policy: $config_path" >&2
+  echo "[ok] synced codex policy: $config_path" >&2
 fi
 
 exit "$status"

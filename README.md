@@ -10,7 +10,7 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `git`: template `.gitconfig` with practical defaults
 - `claude/`: Claude Code model-only setup (`settings.json`)
 - `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
-- `codex/`: Codex model-only policy (`model-policy.env`)
+- `codex/`: Codex policy (`model-policy.env`)
 - `install/`: reusable installer modules and phase orchestration
 
 ## Quick Start
@@ -51,20 +51,21 @@ During install, it sets up:
 - Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-bin-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
 - Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
 - Symlinked OpenCode config files from repo to `~/.config/opencode/`
-- Managed Codex model policy sync into `~/.codex/config.toml`
+- Managed Codex policy sync into `~/.codex/config.toml`
 
 Behavior:
 
-- Runs `codex-config-sync` before launching `codex` (applies model policy keys and removes custom developer instructions)
+- Runs `codex-config-sync` before launching `codex` (applies model/feature policy keys and removes custom developer instructions)
 - Runs `omx-config-sync` during post-sync as a cleanup step for legacy prompt/agent/skill wiring
 - Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)
 - Skips frequent checks when within interval (default 15 min)
 
-Codex model policy (repo default):
+Codex policy (repo default):
 
 - Default/general/search: `gpt-5.5` + `model_reasoning_effort="xhigh"`
 - Planning (`codex-plan`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
 - Implementation/review (`codex-code`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
+- Feature flag: `[features] goals = true`
 - Per-host override file: `overlays/<server_id>/codex/model-policy.env`
 
 Examples:
