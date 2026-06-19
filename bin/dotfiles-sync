@@ -205,14 +205,33 @@ parse_args() {
 
 resolve_clone_url() {
   local repo="$1"
+  local clone_url=""
+
+  if [[ -n "${DOTFILES_SYNC_CLONE_URL:-}" ]]; then
+    printf '%s' "$DOTFILES_SYNC_CLONE_URL"
+    return 0
+  fi
+
   if git -C "$repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "$repo" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true
+    clone_url="$(git -C "$repo" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true)"
+  elif git -C "$DEFAULT_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    clone_url="$(git -C "$DEFAULT_REPO" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true)"
+  fi
+
+  case "$clone_url" in
+    git@github.com:*)
+      clone_url="https://github.com/${clone_url#git@github.com:}"
+      ;;
+    ssh://git@github.com/*)
+      clone_url="https://github.com/${clone_url#ssh://git@github.com/}"
+      ;;
+  esac
+
+  if [[ -n "$clone_url" ]]; then
+    printf '%s' "$clone_url"
     return 0
   fi
-  if git -C "$DEFAULT_REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    git -C "$DEFAULT_REPO" remote get-url "$DOTFILES_REMOTE" 2>/dev/null || true
-    return 0
-  fi
+
   printf '%s' ""
 }
 
@@ -588,7 +607,7 @@ run_remote_once() {
   printf -v env_cmd 'DOTFILES_TARGET_REPO=%q DOTFILES_REMOTE=%q DOTFILES_BRANCH=%q DOTFILES_CLONE_URL=%q DOTFILES_DRY_RUN=%q DOTFILES_EXTRA_POST_CMD=%q bash -s' \
     "$repo_path" "$DOTFILES_REMOTE" "$DOTFILES_BRANCH" "$clone_url" "$DRY_RUN" "$extra_post_cmd"
 
-  local ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout="${DOTFILES_SYNC_SSH_CONNECT_TIMEOUT:-10}" -o ServerAliveInterval=10 -o ServerAliveCountMax=1)
+  local ssh_cmd=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout="${DOTFILES_SYNC_SSH_CONNECT_TIMEOUT:-10}" -o ServerAliveInterval=10 -o ServerAliveCountMax=1)
   if [[ -n "$ssh_port" ]]; then
     ssh_cmd+=(-p "$ssh_port")
   elif [[ -n "${DOTFILES_SYNC_SSH_PORT:-}" ]]; then
