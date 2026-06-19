@@ -588,7 +588,7 @@ run_remote_once() {
   printf -v env_cmd 'DOTFILES_TARGET_REPO=%q DOTFILES_REMOTE=%q DOTFILES_BRANCH=%q DOTFILES_CLONE_URL=%q DOTFILES_DRY_RUN=%q DOTFILES_EXTRA_POST_CMD=%q bash -s' \
     "$repo_path" "$DOTFILES_REMOTE" "$DOTFILES_BRANCH" "$clone_url" "$DRY_RUN" "$extra_post_cmd"
 
-  local ssh_cmd=(ssh)
+  local ssh_cmd=(ssh -o BatchMode=yes -o ConnectTimeout="${DOTFILES_SYNC_SSH_CONNECT_TIMEOUT:-10}" -o ServerAliveInterval=10 -o ServerAliveCountMax=1)
   if [[ -n "$ssh_port" ]]; then
     ssh_cmd+=(-p "$ssh_port")
   elif [[ -n "${DOTFILES_SYNC_SSH_PORT:-}" ]]; then
