@@ -46,6 +46,24 @@ find_nvm_cmd() {
   return 1
 }
 
+install_nvm() {
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    return 0
+  fi
+
+  echo "[info] installing nvm for chatbot CLIs" >&2
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | PROFILE=/dev/null bash
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | PROFILE=/dev/null bash
+  else
+    echo "[error] curl or wget is required to install nvm" >&2
+    return 1
+  fi
+
+  [[ -s "$HOME/.nvm/nvm.sh" ]]
+}
+
 command_available() {
   local cmd="$1"
   command -v "$cmd" >/dev/null 2>&1 || find_nvm_cmd "$cmd" >/dev/null 2>&1
@@ -53,6 +71,10 @@ command_available() {
 
 install_npm_global() {
   local package="$1"
+
+  if [[ ! -s "$HOME/.nvm/nvm.sh" ]]; then
+    install_nvm || return 1
+  fi
 
   if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
     bash -lc 'set -euo pipefail
@@ -68,7 +90,7 @@ install_npm_global() {
     return $?
   fi
 
-  if command -v npm >/dev/null 2>&1; then
+  if [[ "${DOTFILES_CHATBOT_USE_SYSTEM_NPM:-false}" == "true" ]] && command -v npm >/dev/null 2>&1; then
     npm install -g "$package"
     return $?
   fi

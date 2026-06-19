@@ -593,7 +593,7 @@ run_remote_once() {
   local extra_post_cmd="$4"
   local clone_url="$5"
 
-  local target env_cmd
+  local target
   target="$(build_ssh_target "$ssh_host")"
 
   if [[ "$DRY_RUN" == "1" ]]; then
@@ -604,9 +604,6 @@ run_remote_once() {
     return 0
   fi
 
-  printf -v env_cmd 'DOTFILES_TARGET_REPO=%q DOTFILES_REMOTE=%q DOTFILES_BRANCH=%q DOTFILES_CLONE_URL=%q DOTFILES_DRY_RUN=%q DOTFILES_EXTRA_POST_CMD=%q bash -s' \
-    "$repo_path" "$DOTFILES_REMOTE" "$DOTFILES_BRANCH" "$clone_url" "$DRY_RUN" "$extra_post_cmd"
-
   local ssh_cmd=(ssh -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout="${DOTFILES_SYNC_SSH_CONNECT_TIMEOUT:-10}" -o ServerAliveInterval=10 -o ServerAliveCountMax=1)
   if [[ -n "$ssh_port" ]]; then
     ssh_cmd+=(-p "$ssh_port")
@@ -616,10 +613,17 @@ run_remote_once() {
   if [[ -n "${DOTFILES_SYNC_SSH_IDENTITY:-}" ]]; then
     ssh_cmd+=(-i "${DOTFILES_SYNC_SSH_IDENTITY}")
   fi
-  ssh_cmd+=("$target" "$env_cmd")
+  ssh_cmd+=("$target" bash -s -- "$repo_path" "$DOTFILES_REMOTE" "$DOTFILES_BRANCH" "$clone_url" "$DRY_RUN" "$extra_post_cmd")
 
   "${ssh_cmd[@]}" <<'REMOTE'
 set -euo pipefail
+
+DOTFILES_TARGET_REPO="$1"
+DOTFILES_REMOTE="$2"
+DOTFILES_BRANCH="$3"
+DOTFILES_CLONE_URL="$4"
+DOTFILES_DRY_RUN="$5"
+DOTFILES_EXTRA_POST_CMD="$6"
 
 if [[ "$DOTFILES_TARGET_REPO" == "~" ]]; then
   DOTFILES_TARGET_REPO="$HOME"
@@ -633,6 +637,12 @@ if ! git -C "$DOTFILES_TARGET_REPO" rev-parse --is-inside-work-tree >/dev/null 2
 fi
 
 SYNC_SCRIPT="$DOTFILES_TARGET_REPO/bin/dotfiles-sync"
+if [[ ! -f "$SYNC_SCRIPT" ]]; then
+  git -C "$DOTFILES_TARGET_REPO" fetch "$DOTFILES_REMOTE" "$DOTFILES_BRANCH"
+  git -C "$DOTFILES_TARGET_REPO" reset --hard "$DOTFILES_REMOTE/$DOTFILES_BRANCH"
+  git -C "$DOTFILES_TARGET_REPO" clean -fd
+fi
+
 SYNC_ARGS=(local --repo "$DOTFILES_TARGET_REPO" --remote "$DOTFILES_REMOTE" --branch "$DOTFILES_BRANCH")
 if [[ "$DOTFILES_DRY_RUN" == "1" ]]; then
   SYNC_ARGS+=(--dry-run)
