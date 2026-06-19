@@ -9,7 +9,7 @@ This document automates rollout on all enabled servers:
 ## Preconditions
 
 - Run from the control node.
-- `sync/servers.tsv` exists and enabled targets are set with `enabled=1`.
+- Target servers have self-registered under `sync/registry/`, or legacy `sync/servers.tsv` has enabled targets.
 - The control node can SSH into each target (optional SSH settings loaded from `~/.config/dotfiles-sync/config.env`).
 
 ## Execution Contract

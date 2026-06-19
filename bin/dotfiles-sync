@@ -34,7 +34,7 @@ Commands:
   run       Run local sync and, if controller, fan-out sync
   local     Run local sync only
   fanout    Run fan-out sync only
-  validate  Validate inventory/allowlist configuration
+  validate  Validate registry/inventory/allowlist configuration
 
 Options:
   --repo PATH     Dotfiles repository path
@@ -95,6 +95,11 @@ get_server_id() {
 
 get_inventory_file() {
   local value="${DOTFILES_SYNC_INVENTORY:-$DOTFILES_REPO/sync/servers.tsv}"
+  expand_home_path "$value"
+}
+
+get_registry_dir() {
+  local value="${DOTFILES_SYNC_REGISTRY_DIR:-$DOTFILES_REPO/sync/registry}"
   expand_home_path "$value"
 }
 
@@ -457,6 +462,79 @@ validate_inventory_file() {
   return 0
 }
 
+registry_value() {
+  local file="$1"
+  local key="$2"
+  local line value
+
+  line="$(grep -E "^[[:space:]]*$key=" "$file" 2>/dev/null | tail -n 1 || true)"
+  if [[ -z "$line" ]]; then
+    printf '%s' ""
+    return 0
+  fi
+
+  value="${line#*=}"
+  value="$(trim "$value")"
+  if [[ "$value" == \"*\" && "$value" == *\" ]]; then
+    value="${value:1:${#value}-2}"
+    value="${value//\\\"/\"}"
+    value="${value//\\\\/\\}"
+  fi
+  printf '%s' "$value"
+}
+
+registry_has_entries() {
+  local registry_dir
+  registry_dir="$(get_registry_dir)"
+  compgen -G "$registry_dir/*.env" >/dev/null 2>&1
+}
+
+validate_registry_file() {
+  local file="$1"
+  local server_id ssh_host repo_path ssh_port enabled
+
+  server_id="$(registry_value "$file" server_id)"
+  ssh_host="$(registry_value "$file" ssh_host)"
+  repo_path="$(registry_value "$file" repo_path)"
+  ssh_port="$(registry_value "$file" ssh_port)"
+  enabled="$(registry_value "$file" enabled)"
+  enabled="${enabled:-1}"
+
+  if [[ -z "$server_id" ]]; then
+    echo "[error] registry missing server_id: $file" >&2
+    return 1
+  fi
+  if [[ "$enabled" != "0" && "$enabled" != "1" ]]; then
+    echo "[error] registry enabled must be 0 or 1: $file" >&2
+    return 1
+  fi
+  if [[ "$enabled" == "1" && -z "$ssh_host" ]]; then
+    echo "[error] registry ssh_host is required when enabled=1: $file" >&2
+    return 1
+  fi
+  if [[ "$enabled" == "1" && -z "$repo_path" ]]; then
+    echo "[error] registry repo_path is required when enabled=1: $file" >&2
+    return 1
+  fi
+  if [[ -n "$ssh_port" && ! "$ssh_port" =~ ^[0-9]+$ ]]; then
+    echo "[error] registry ssh_port must be numeric: $file" >&2
+    return 1
+  fi
+}
+
+validate_registry_dir() {
+  local registry_dir file status=0
+  registry_dir="$(get_registry_dir)"
+
+  [[ -d "$registry_dir" ]] || return 0
+
+  while IFS= read -r -d '' file; do
+    validate_registry_file "$file" || status=1
+  done < <(find "$registry_dir" -maxdepth 1 -type f -name '*.env' -print0)
+
+  return "$status"
+}
+
 validate_allowlist_file() {
   local allowlist="$1"
   local line rel_path
@@ -594,6 +672,66 @@ sync_remote_with_retry() {
 }
 
 do_fanout_sync() {
+  if registry_has_entries; then
+    do_fanout_registry_sync
+  else
+    do_fanout_inventory_sync
+  fi
+}
+
+do_fanout_registry_sync() {
+  local registry_dir server_id_local clone_url
+  local file server_id ssh_host repo_path ssh_port post_cmd enabled
+  local rc=0
+  local -a pids=()
+  local -a labels=()
+
+  registry_dir="$(get_registry_dir)"
+  if ! validate_registry_dir; then
+    return 1
+  fi
+
+  server_id_local="$(get_server_id)"
+  clone_url="$(resolve_clone_url "$DOTFILES_REPO")"
+  if [[ -z "$clone_url" ]]; then
+    echo "[error] cannot determine clone URL for fan-out" >&2
+    return 1
+  fi
+
+  while IFS= read -r -d '' file; do
+    server_id="$(registry_value "$file" server_id)"
+    ssh_host="$(registry_value "$file" ssh_host)"
+    repo_path="$(registry_value "$file" repo_path)"
+    ssh_port="$(registry_value "$file" ssh_port)"
+    post_cmd="$(registry_value "$file" post_cmd)"
+    enabled="$(registry_value "$file" enabled)"
+    enabled="${enabled:-1}"
+
+    [[ "$enabled" == "1" ]] || continue
+
+    if [[ "$server_id" == "$server_id_local" ]]; then
+      echo "[skip] skipping self target: $server_id"
+      continue
+    fi
+
+    (
+      sync_remote_with_retry "$server_id" "$ssh_host" "$repo_path" "$ssh_port" "$post_cmd" "$clone_url"
+    ) &
+    pids+=("$!")
+    labels+=("$server_id")
+  done < <(find "$registry_dir" -maxdepth 1 -type f -name '*.env' -print0 | sort -z)
+
+  for i in "${!pids[@]}"; do
+    if ! wait "${pids[$i]}"; then
+      echo "[error] fan-out target failed: ${labels[$i]}" >&2
+      rc=1
+    fi
+  done
+
+  return "$rc"
+}
+
+do_fanout_inventory_sync() {
   local inventory server_id_local clone_url
   local line line_no=0 seen_header=0
   local tab_count server_id ssh_host repo_path ssh_port post_cmd enabled
@@ -697,7 +835,10 @@ do_validate() {
   inventory="$(get_inventory_file)"
   allowlist="$(get_allowlist_file)"
 
-  validate_inventory_file "$inventory"
+  validate_registry_dir
+  if [[ -f "$inventory" ]]; then
+    validate_inventory_file "$inventory"
+  fi
   validate_allowlist_file "$allowlist"
   echo "[ok] validation passed"
 }

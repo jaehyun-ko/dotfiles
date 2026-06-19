@@ -417,6 +417,48 @@ install_dotfiles_helpers() {
     print_status "Dotfiles helper launchers installed"
 }
 
+install_chatbot_clis() {
+    if [[ "$DOTFILES_INSTALL_CHATBOT_CLIS" != "true" ]]; then
+        print_info "Skipping chatbot CLI installation"
+        return 0
+    fi
+
+    print_info "Checking chatbot CLI installation..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would run bin/dotfiles-chatbot-install"
+        return 0
+    fi
+
+    bash "$DOTFILES_DIR/bin/dotfiles-chatbot-install" || {
+        print_warning "Chatbot CLI installation had issues"
+        return 1
+    }
+
+    print_status "Chatbot CLIs are installed"
+}
+
+register_dotfiles_node() {
+    if [[ "$DOTFILES_REGISTER_NODE" != "true" ]]; then
+        print_info "Skipping dotfiles node registration"
+        return 0
+    fi
+
+    print_info "Registering dotfiles node..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would run bin/dotfiles-register"
+        return 0
+    fi
+
+    bash "$DOTFILES_DIR/bin/dotfiles-register" --repo "$DOTFILES_DIR" || {
+        print_warning "Dotfiles node registration had issues"
+        return 1
+    }
+
+    print_status "Dotfiles node registered"
+}
+
 # Change default shell to zsh
 change_default_shell() {
     if [ "$SHELL" = "$(which zsh)" ]; then

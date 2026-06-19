@@ -46,6 +46,14 @@ parse_arguments() {
                 export ENABLE_DOTFILES_AUTO_UPDATE=false
                 shift
                 ;;
+            --skip-chatbot-clis)
+                export DOTFILES_INSTALL_CHATBOT_CLIS=false
+                shift
+                ;;
+            --skip-node-register)
+                export DOTFILES_REGISTER_NODE=false
+                shift
+                ;;
             --skip-pip-mirror)
                 export SKIP_PIP_MIRROR=true
                 shift
@@ -95,6 +103,8 @@ Mirror Options:
     --skip-mirror          Skip APT mirror configuration (Ubuntu/Debian)
     --enable-dotfiles-autoupdate Enable dotfiles repository auto-update timer setup
     --skip-dotfiles-autoupdate  Legacy no-op; auto-update timer is disabled by default
+    --skip-chatbot-clis   Skip Claude/Codex/OpenCode CLI installation
+    --skip-node-register  Skip automatic fan-out registry self-registration
     --skip-pip-mirror      Skip pip mirror configuration
     --auto-mirror          Automatically select best mirror (no prompts)
     --fastest-mirror       Test and select fastest mirror (slower startup)
@@ -121,6 +131,9 @@ Examples:
 
     # Enable dotfiles auto-update timer installation
     $0 --enable-dotfiles-autoupdate
+
+    # Skip chatbot CLI installation and node registration
+    $0 --skip-chatbot-clis --skip-node-register
 
 EOF
 }

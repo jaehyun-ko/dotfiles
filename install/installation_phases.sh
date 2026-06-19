@@ -208,7 +208,15 @@ phase6_configuration() {
     echo
     install_dotfiles_helpers || print_warning "Dotfiles helper launcher installation had issues"
 
-    # 6.3 Dotfiles auto-update timer
+    # 6.3 Install native chatbot CLIs
+    echo
+    install_chatbot_clis || print_warning "Chatbot CLI installation had issues"
+
+    # 6.4 Register this node for push-based fan-out
+    echo
+    register_dotfiles_node || print_warning "Dotfiles node registration had issues"
+
+    # 6.5 Dotfiles auto-update timer
     echo
     if [[ "$ENABLE_DOTFILES_AUTO_UPDATE" != "true" ]]; then
         print_info "Skipping dotfiles auto-update timer (default; use --enable-dotfiles-autoupdate to opt in)"
@@ -221,7 +229,7 @@ phase6_configuration() {
         install_dotfiles_auto_update_timer || print_warning "dotfiles auto-update timer had issues"
     fi
 
-    # 6.4 Change default shell (should be last)
+    # 6.6 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
 
@@ -386,10 +394,18 @@ validate_installation() {
         checks+=("⚠️  Rust/Cargo")
     fi
 
-    if [ -x "$HOME/.local/bin/dotfiles-sync" ] && [ -x "$HOME/.local/bin/dotfiles-deploy" ] && [ -x "$HOME/.local/bin/dotfiles-post-sync" ] && [ -x "$HOME/.local/bin/dotfiles-bin-sync" ] && [ -x "$HOME/.local/bin/dotfiles-systemd-sync" ]; then
+    if [ -x "$HOME/.local/bin/dotfiles-sync" ] && [ -x "$HOME/.local/bin/dotfiles-deploy" ] && [ -x "$HOME/.local/bin/dotfiles-register" ] && [ -x "$HOME/.local/bin/dotfiles-chatbot-install" ] && [ -x "$HOME/.local/bin/dotfiles-post-sync" ] && [ -x "$HOME/.local/bin/dotfiles-bin-sync" ] && [ -x "$HOME/.local/bin/dotfiles-systemd-sync" ]; then
         checks+=("✅ dotfiles helpers")
     else
         checks+=("⚠️  dotfiles helpers")
+    fi
+
+    if [[ "$DOTFILES_INSTALL_CHATBOT_CLIS" != "true" ]]; then
+        checks+=("⚠️  chatbot CLIs skipped")
+    elif "$DOTFILES_DIR/bin/dotfiles-chatbot-install" --check >/dev/null 2>&1; then
+        checks+=("✅ chatbot CLIs")
+    else
+        checks+=("⚠️  chatbot CLIs")
     fi
 
     if [[ "$ENABLE_DOTFILES_AUTO_UPDATE" != "true" ]]; then

@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF_HELP'
+Usage: dotfiles-chatbot-install [--check]
+
+Ensure native chatbot CLIs are installed:
+  - claude   (@anthropic-ai/claude-code)
+  - codex    (@openai/codex)
+  - opencode (opencode-ai)
+
+Options:
+  --check     Validate only, do not install
+  --help, -h  Show this help
+EOF_HELP
+}
+
+mode="install"
+while (($# > 0)); do
+  case "$1" in
+    --check)
+      mode="check"
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+find_nvm_cmd() {
+  local cmd="$1"
+  local candidate
+  for candidate in "$HOME"/.nvm/versions/node/*/bin/"$cmd"; do
+    if [[ -x "$candidate" ]]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+command_available() {
+  local cmd="$1"
+  command -v "$cmd" >/dev/null 2>&1 || find_nvm_cmd "$cmd" >/dev/null 2>&1
+}
+
+install_npm_global() {
+  local package="$1"
+
+  if [[ -s "$HOME/.nvm/nvm.sh" ]]; then
+    bash -lc 'set -euo pipefail
+      export NVM_DIR="$HOME/.nvm"
+      source "$NVM_DIR/nvm.sh"
+      nvm use node >/dev/null 2>&1 || {
+        nvm install node
+        nvm use node
+        nvm alias default node
+      }
+      npm install -g "$1"
+    ' bash "$package"
+    return $?
+  fi
+
+  if command -v npm >/dev/null 2>&1; then
+    npm install -g "$package"
+    return $?
+  fi
+
+  echo "[error] npm not found; cannot install $package" >&2
+  return 1
+}
+
+ensure_cli() {
+  local cmd="$1"
+  local package="$2"
+  local label="$3"
+
+  if command_available "$cmd"; then
+    echo "[ok] $label installed" >&2
+    return 0
+  fi
+
+  if [[ "$mode" == "check" ]]; then
+    echo "[missing] $label ($cmd)" >&2
+    return 1
+  fi
+
+  echo "[info] installing $label ($package)" >&2
+  install_npm_global "$package"
+
+  if command_available "$cmd"; then
+    echo "[ok] $label installed" >&2
+    return 0
+  fi
+
+  echo "[error] $label install completed but command was not found: $cmd" >&2
+  return 1
+}
+
+status=0
+ensure_cli "claude" "${DOTFILES_CLAUDE_CODE_PACKAGE:-@anthropic-ai/claude-code}" "Claude Code CLI" || status=1
+ensure_cli "codex" "${DOTFILES_CODEX_PACKAGE:-@openai/codex}" "Codex CLI" || status=1
+ensure_cli "opencode" "${DOTFILES_OPENCODE_PACKAGE:-opencode-ai}" "OpenCode CLI" || status=1
+
+exit "$status"

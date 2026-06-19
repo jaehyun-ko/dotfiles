@@ -51,6 +51,8 @@ target_dir="$HOME/.local/bin"
 launchers=(
   dotfiles-sync
   dotfiles-deploy
+  dotfiles-register
+  dotfiles-chatbot-install
   dotfiles-post-sync
   dotfiles-bin-sync
   dotfiles-systemd-sync

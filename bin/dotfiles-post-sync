@@ -27,6 +27,9 @@ remove_managed_symlink() {
 }
 
 "$script_dir/dotfiles-bin-sync"
+if [[ "${DOTFILES_INSTALL_CHATBOT_CLIS:-true}" == "true" ]]; then
+  "$script_dir/dotfiles-chatbot-install"
+fi
 remove_managed_symlink "$HOME/.claude/settings.json" "$repo_dir/claude/settings.json"
 remove_managed_symlink "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/opencode.json" "$repo_dir/opencode/opencode.json"
 remove_managed_symlink "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/oh-my-opencode.json" "$repo_dir/opencode/oh-my-opencode.json"

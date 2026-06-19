@@ -89,8 +89,10 @@ fi
 
 if [[ "$no_push" != "true" ]]; then
   if [[ "$dry_run" == "true" ]]; then
+    echo "[dry-run] would run: git -C \"$repo\" pull --rebase \"$remote\" \"$branch\""
     echo "[dry-run] would run: git -C \"$repo\" push \"$remote\" \"HEAD:$branch\""
   else
+    git -C "$repo" pull --rebase "$remote" "$branch"
     git -C "$repo" push "$remote" "HEAD:$branch"
   fi
 fi

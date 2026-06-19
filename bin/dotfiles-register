@@ -1,0 +1,239 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF_HELP'
+Usage: dotfiles-register [options]
+
+Register this checkout as a fan-out target under sync/registry/<server_id>.env.
+
+Options:
+  --repo PATH       Dotfiles repository path
+  --remote NAME     Git remote name (default: origin)
+  --branch NAME     Git branch (default: current branch, fallback: main)
+  --server-id ID    Server id (default: DOTFILES_SERVER_ID or hostname -s)
+  --ssh-host HOST   SSH host for controller fan-out
+  --repo-path PATH  Repo path on this server
+  --ssh-port PORT   SSH port
+  --post-cmd CMD    Extra post command after sync
+  --disabled        Register with enabled=0
+  --no-push         Do not commit/push the registry file
+  --dry-run         Print actions without writing
+  --help, -h        Show this help
+EOF_HELP
+}
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+require_arg_value() {
+  local flag="$1"
+  local value="${2:-}"
+  if [[ -z "$value" || "$value" == --* ]]; then
+    echo "Missing value for $flag" >&2
+    exit 2
+  fi
+}
+
+shell_string() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  printf '"%s"' "$value"
+}
+
+sanitize_id() {
+  local value="$1"
+  value="$(printf '%s' "$value" | tr -c 'A-Za-z0-9_.-' '-')"
+  value="${value##-}"
+  value="${value%%-}"
+  printf '%s' "$value"
+}
+
+default_ssh_host() {
+  if [[ -n "${DOTFILES_SYNC_SSH_HOST:-}" ]]; then
+    printf '%s' "$DOTFILES_SYNC_SSH_HOST"
+    return 0
+  fi
+  hostname -f 2>/dev/null || hostname
+}
+
+script_dir="$(resolve_script_dir)"
+repo="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+remote="${DOTFILES_AUTO_UPDATE_REMOTE:-origin}"
+branch="${DOTFILES_AUTO_UPDATE_BRANCH:-}"
+server_id="${DOTFILES_SERVER_ID:-}"
+ssh_host="${DOTFILES_SYNC_SSH_HOST:-}"
+repo_path=""
+ssh_port="${DOTFILES_SYNC_SSH_PORT:-}"
+post_cmd="${DOTFILES_SYNC_POST_CMD:-}"
+enabled="1"
+no_push="false"
+dry_run="false"
+
+config_env="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles-sync/config.env"
+if [[ -f "$config_env" ]]; then
+  # shellcheck disable=SC1090
+  source "$config_env"
+  server_id="${server_id:-${DOTFILES_SERVER_ID:-}}"
+  ssh_host="${ssh_host:-${DOTFILES_SYNC_SSH_HOST:-}}"
+  ssh_port="${ssh_port:-${DOTFILES_SYNC_SSH_PORT:-}}"
+  post_cmd="${post_cmd:-${DOTFILES_SYNC_POST_CMD:-}}"
+fi
+
+while (($# > 0)); do
+  case "$1" in
+    --repo)
+      require_arg_value "$1" "${2:-}"
+      repo="$2"
+      shift 2
+      ;;
+    --remote)
+      require_arg_value "$1" "${2:-}"
+      remote="$2"
+      shift 2
+      ;;
+    --branch)
+      require_arg_value "$1" "${2:-}"
+      branch="$2"
+      shift 2
+      ;;
+    --server-id)
+      require_arg_value "$1" "${2:-}"
+      server_id="$2"
+      shift 2
+      ;;
+    --ssh-host)
+      require_arg_value "$1" "${2:-}"
+      ssh_host="$2"
+      shift 2
+      ;;
+    --repo-path)
+      require_arg_value "$1" "${2:-}"
+      repo_path="$2"
+      shift 2
+      ;;
+    --ssh-port)
+      require_arg_value "$1" "${2:-}"
+      ssh_port="$2"
+      shift 2
+      ;;
+    --post-cmd)
+      require_arg_value "$1" "${2:-}"
+      post_cmd="$2"
+      shift 2
+      ;;
+    --disabled)
+      enabled="0"
+      shift
+      ;;
+    --no-push)
+      no_push="true"
+      shift
+      ;;
+    --dry-run)
+      dry_run="true"
+      shift
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+repo="$(cd "$repo" && pwd)"
+repo_path="${repo_path:-$repo}"
+server_id="${server_id:-$(hostname -s 2>/dev/null || hostname)}"
+server_id="$(sanitize_id "$server_id")"
+ssh_host="${ssh_host:-$(default_ssh_host)}"
+
+if [[ -z "$server_id" ]]; then
+  echo "[error] server id is empty" >&2
+  exit 1
+fi
+if [[ -z "$ssh_host" && "$enabled" == "1" ]]; then
+  echo "[error] ssh host is empty; set DOTFILES_SYNC_SSH_HOST or pass --ssh-host" >&2
+  exit 1
+fi
+if [[ -n "$ssh_port" && ! "$ssh_port" =~ ^[0-9]+$ ]]; then
+  echo "[error] ssh port must be numeric: $ssh_port" >&2
+  exit 1
+fi
+
+if [[ -z "$branch" ]]; then
+  branch="$(git -C "$repo" branch --show-current 2>/dev/null || true)"
+  branch="${branch:-main}"
+fi
+
+registry_dir="$repo/sync/registry"
+registry_file="$registry_dir/$server_id.env"
+tmp_file="$(mktemp)"
+trap 'rm -f "$tmp_file"' EXIT
+
+cat >"$tmp_file" <<EOF_REGISTRY
+server_id=$(shell_string "$server_id")
+ssh_host=$(shell_string "$ssh_host")
+repo_path=$(shell_string "$repo_path")
+ssh_port=$(shell_string "$ssh_port")
+post_cmd=$(shell_string "$post_cmd")
+enabled=$(shell_string "$enabled")
+EOF_REGISTRY
+
+if [[ "$dry_run" == "true" ]]; then
+  echo "[dry-run] would write $registry_file"
+  cat "$tmp_file"
+  if [[ "$no_push" != "true" ]]; then
+    echo "[dry-run] would commit and push registry entry to $remote/$branch"
+  fi
+  exit 0
+fi
+
+mkdir -p "$registry_dir"
+
+if [[ -f "$registry_file" ]] && cmp -s "$tmp_file" "$registry_file"; then
+  echo "[ok] registry unchanged: $registry_file" >&2
+  exit 0
+fi
+
+mv "$tmp_file" "$registry_file"
+git -C "$repo" add "$registry_file"
+
+if git -C "$repo" diff --cached --quiet -- "$registry_file"; then
+  echo "[ok] registry unchanged: $registry_file" >&2
+  exit 0
+fi
+
+git -C "$repo" \
+  -c user.name="${DOTFILES_REGISTER_GIT_NAME:-dotfiles-register}" \
+  -c user.email="${DOTFILES_REGISTER_GIT_EMAIL:-dotfiles-register@localhost}" \
+  commit -m "Register dotfiles node $server_id" -- "$registry_file"
+
+if [[ "$no_push" == "true" ]]; then
+  echo "[ok] registry committed locally: $registry_file" >&2
+  exit 0
+fi
+
+if git -C "$repo" push "$remote" "HEAD:$branch"; then
+  echo "[ok] registry pushed: $server_id" >&2
+  exit 0
+fi
+
+echo "[warn] registry push failed; retrying after rebase" >&2
+git -C "$repo" pull --rebase "$remote" "$branch"
+git -C "$repo" push "$remote" "HEAD:$branch"
+echo "[ok] registry pushed: $server_id" >&2

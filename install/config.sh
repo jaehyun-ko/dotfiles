@@ -84,6 +84,8 @@ export AUTO_MIRROR="${AUTO_MIRROR:-false}"  # Automatically select best mirror w
 export FASTEST_MIRROR="${FASTEST_MIRROR:-false}"  # Test and use fastest mirror (takes time)
 export MIRROR_LOCATION="${MIRROR_LOCATION:-}"  # Force specific mirror location (kr, jp, cn, us)
 export ENABLE_DOTFILES_AUTO_UPDATE="${ENABLE_DOTFILES_AUTO_UPDATE:-false}"  # Opt in to dotfiles auto update timer
+export DOTFILES_INSTALL_CHATBOT_CLIS="${DOTFILES_INSTALL_CHATBOT_CLIS:-true}"  # Install native chatbot CLIs only
+export DOTFILES_REGISTER_NODE="${DOTFILES_REGISTER_NODE:-true}"  # Self-register this node for fan-out
 
 # Dotfiles sync defaults
 export DOTFILES_AUTO_UPDATE_REMOTE="${DOTFILES_AUTO_UPDATE_REMOTE:-origin}"
