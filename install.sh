@@ -38,12 +38,12 @@ parse_arguments() {
                 export SKIP_MIRROR_CHANGE=true
                 shift
                 ;;
-            --skip-codex-sync)
-                export SKIP_CODEX_SYNC_STACK=true
+            --enable-dotfiles-autoupdate)
+                export ENABLE_DOTFILES_AUTO_UPDATE=true
                 shift
                 ;;
             --skip-dotfiles-autoupdate)
-                export SKIP_DOTFILES_AUTO_UPDATE=true
+                export ENABLE_DOTFILES_AUTO_UPDATE=false
                 shift
                 ;;
             --skip-pip-mirror)
@@ -93,8 +93,8 @@ Options:
 
 Mirror Options:
     --skip-mirror          Skip APT mirror configuration (Ubuntu/Debian)
-    --skip-codex-sync      Skip Codex/OmO sync wrapper + timer setup
-    --skip-dotfiles-autoupdate  Skip dotfiles repository auto-update timer setup
+    --enable-dotfiles-autoupdate Enable dotfiles repository auto-update timer setup
+    --skip-dotfiles-autoupdate  Legacy no-op; auto-update timer is disabled by default
     --skip-pip-mirror      Skip pip mirror configuration
     --auto-mirror          Automatically select best mirror (no prompts)
     --fastest-mirror       Test and select fastest mirror (slower startup)
@@ -119,11 +119,8 @@ Examples:
     # Skip mirror change (use current sources)
     $0 --skip-mirror
 
-    # Skip Codex/OmO sync stack installation
-    $0 --skip-codex-sync
-
-    # Skip dotfiles auto-update timer installation
-    $0 --skip-dotfiles-autoupdate
+    # Enable dotfiles auto-update timer installation
+    $0 --enable-dotfiles-autoupdate
 
 EOF
 }

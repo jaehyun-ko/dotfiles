@@ -1,11 +1,10 @@
-# Chatbot Instruction: Step-1 Auto Rollout to All Servers
+# Dotfiles Auto Rollout to All Servers
 
-This document automates the **Step 1** rollout on all enabled servers:
+This document automates rollout on all enabled servers:
 
 1. `git pull --ff-only origin main`
 2. `./install.sh -y`
-3. `systemctl --user daemon-reload`
-4. `systemctl --user restart dotfiles-auto-update.timer`
+3. `~/dotfiles/bin/dotfiles-post-sync`
 
 ## Preconditions
 
@@ -13,7 +12,7 @@ This document automates the **Step 1** rollout on all enabled servers:
 - `sync/servers.tsv` exists and enabled targets are set with `enabled=1`.
 - The control node can SSH into each target (optional SSH settings loaded from `~/.config/dotfiles-sync/config.env`).
 
-## Chatbot Execution Contract
+## Execution Contract
 
 - Continue all hosts even if some fail.
 - Print per-host result and final success/failure summary.
@@ -87,8 +86,7 @@ fi
 cd "$DOTFILES_TARGET_REPO"
 git pull --ff-only origin main
 ./install.sh -y
-systemctl --user daemon-reload
-systemctl --user restart dotfiles-auto-update.timer
+~/dotfiles/bin/dotfiles-post-sync
 REMOTE
   then
     echo "[ok] $server_id"
@@ -112,6 +110,4 @@ Run this after rollout:
 
 ```bash
 DOTFILES_SYNC_CONTROLLER=true ~/dotfiles/bin/dotfiles-sync run --repo ~/dotfiles --dry-run
-~/dotfiles/bin/codex-config-sync --check
-~/dotfiles/bin/omx-config-sync --check
 ```

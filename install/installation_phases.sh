@@ -204,45 +204,24 @@ phase6_configuration() {
     print_info "Creating dotfile symlinks..."
     create_symlinks || print_warning "Some symlinks failed"
     
-    # 6.2 Claude Code configuration (optional)
+    # 6.2 Install dotfiles helper launchers
     echo
-    if is_claude_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Claude Code configuration already installed (auto-skip)"
-    elif confirm "Install Claude Code model-only configuration?"; then
-        install_claude_config || print_warning "Claude config installation had issues"
-    else
-        print_info "Skipping Claude Code configuration"
-    fi
+    install_dotfiles_helpers || print_warning "Dotfiles helper launcher installation had issues"
 
-    # 6.3 OpenCode configuration
+    # 6.3 Dotfiles auto-update timer
     echo
-    if is_opencode_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "OpenCode configuration already installed (auto-skip)"
-    else
-        install_opencode_config || print_warning "OpenCode config installation had issues"
-    fi
-
-    # 6.4 Codex/OmO sync stack
-    echo
-    if [[ "$SKIP_CODEX_SYNC_STACK" == "true" ]]; then
-        print_info "Skipping Codex/OmO sync stack (--skip-codex-sync)"
-    elif is_codex_omo_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Codex/OmO sync stack already configured (auto-skip)"
-    else
-        install_codex_omo_sync_stack || print_warning "Codex/OmO sync stack had issues"
-    fi
-
-    # 6.5 Dotfiles auto-update timer
-    echo
-    if [[ "$SKIP_DOTFILES_AUTO_UPDATE" == "true" ]]; then
-        print_info "Skipping dotfiles auto-update timer (--skip-dotfiles-autoupdate)"
+    if [[ "$ENABLE_DOTFILES_AUTO_UPDATE" != "true" ]]; then
+        print_info "Skipping dotfiles auto-update timer (default; use --enable-dotfiles-autoupdate to opt in)"
+        if [[ "$DRY_RUN" != "true" ]]; then
+            DOTFILES_AUTO_UPDATE_ENABLED=false bash "$DOTFILES_DIR/bin/dotfiles-systemd-sync" || print_warning "dotfiles auto-update timer cleanup had issues"
+        fi
     elif is_dotfiles_auto_update_timer_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
         print_status "dotfiles auto-update timer already configured (auto-skip)"
     else
         install_dotfiles_auto_update_timer || print_warning "dotfiles auto-update timer had issues"
     fi
 
-    # 6.6 Change default shell (should be last)
+    # 6.4 Change default shell (should be last)
     print_info "Setting default shell..."
     change_default_shell || print_warning "Could not change default shell"
 
@@ -407,59 +386,20 @@ validate_installation() {
         checks+=("⚠️  Rust/Cargo")
     fi
 
-    if command_exists_or_nvm codex; then
-        checks+=("✅ Codex CLI")
+    if [ -x "$HOME/.local/bin/dotfiles-sync" ] && [ -x "$HOME/.local/bin/dotfiles-deploy" ] && [ -x "$HOME/.local/bin/dotfiles-post-sync" ] && [ -x "$HOME/.local/bin/dotfiles-bin-sync" ] && [ -x "$HOME/.local/bin/dotfiles-systemd-sync" ]; then
+        checks+=("✅ dotfiles helpers")
     else
-        checks+=("⚠️  Codex CLI")
+        checks+=("⚠️  dotfiles helpers")
     fi
 
-    if command_exists_or_nvm omx; then
-        checks+=("✅ oh-my-codex (omx)")
-    else
-        checks+=("⚠️  oh-my-codex (omx)")
-    fi
-
-    if command_exists_or_nvm oh-my-opencode; then
-        checks+=("✅ oh-my-opencode")
-    else
-        checks+=("⚠️  oh-my-opencode")
-    fi
-
-    if is_native_opencode_cli_installed; then
-        checks+=("✅ OpenCode CLI")
-    else
-        checks+=("⚠️  OpenCode CLI")
-    fi
-
-    if [ -x "$HOME/.local/bin/codex-sync" ] && [ -x "$HOME/.local/bin/omo-sync" ] && [ -x "$HOME/.local/bin/dotfiles-sync" ] && [ -x "$HOME/.local/bin/codex-config-sync" ] && [ -x "$HOME/.local/bin/omx-config-sync" ] && [ -x "$HOME/.local/bin/opencode-config-sync" ] && [ -x "$HOME/.local/bin/codex-plan" ] && [ -x "$HOME/.local/bin/codex-code" ] && [ -x "$HOME/.local/bin/opencode" ]; then
-        checks+=("✅ codex/omo sync launchers")
-    elif [ -x "$HOME/.local/bin/codex-sync" ] || [ -x "$HOME/.local/bin/omo-sync" ] || [ -x "$HOME/.local/bin/dotfiles-sync" ] || [ -x "$HOME/.local/bin/codex-config-sync" ] || [ -x "$HOME/.local/bin/omx-config-sync" ] || [ -x "$HOME/.local/bin/opencode-config-sync" ] || [ -x "$HOME/.local/bin/codex-plan" ] || [ -x "$HOME/.local/bin/codex-code" ] || [ -x "$HOME/.local/bin/opencode" ]; then
-        checks+=("⚠️  codex/omo sync launchers (partial)")
-    else
-        checks+=("⚠️  codex/omo sync launchers")
-    fi
-
-    if is_opencode_config_installed; then
-        checks+=("✅ OpenCode config")
-    else
-        checks+=("⚠️  OpenCode config")
-    fi
-
-    if is_dotfiles_auto_update_timer_ready; then
+    if [[ "$ENABLE_DOTFILES_AUTO_UPDATE" != "true" ]]; then
+        checks+=("✅ dotfiles auto-update timer disabled")
+    elif is_dotfiles_auto_update_timer_ready; then
         checks+=("✅ dotfiles auto-update timer")
     elif command_exists systemctl; then
         checks+=("⚠️  dotfiles auto-update timer")
     else
         checks+=("⚠️  dotfiles auto-update timer (systemctl unavailable)")
-    fi
-
-    # Check Claude config
-    if is_claude_config_installed; then
-        checks+=("✅ Claude Code Config")
-    elif [ -d "$HOME/.claude" ]; then
-        checks+=("⚠️  Claude Code Config (partial)")
-    else
-        checks+=("⚠️  Claude Code Config (not installed)")
     fi
 
     # Check symlinks

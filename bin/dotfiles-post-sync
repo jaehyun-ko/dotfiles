@@ -15,12 +15,19 @@ resolve_script_dir() {
 }
 
 script_dir="$(resolve_script_dir)"
+repo_dir="$(cd "$script_dir/.." && pwd)"
+
+remove_managed_symlink() {
+  local dst="$1"
+  local expected="$2"
+
+  if [[ -L "$dst" ]] && [[ "$(readlink "$dst" 2>/dev/null || true)" == "$expected" ]]; then
+    rm -f "$dst"
+  fi
+}
 
 "$script_dir/dotfiles-bin-sync"
-if [[ -x "$script_dir/../claude/install.sh" ]]; then
-  "$script_dir/../claude/install.sh"
-fi
-"$script_dir/opencode-config-sync" --force
-"$script_dir/codex-config-sync"
-"$script_dir/omx-config-sync"
+remove_managed_symlink "$HOME/.claude/settings.json" "$repo_dir/claude/settings.json"
+remove_managed_symlink "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/opencode.json" "$repo_dir/opencode/opencode.json"
+remove_managed_symlink "${XDG_CONFIG_HOME:-$HOME/.config}/opencode/oh-my-opencode.json" "$repo_dir/opencode/oh-my-opencode.json"
 "$script_dir/dotfiles-systemd-sync"

@@ -6,7 +6,7 @@ show_help() {
 Usage: dotfiles-systemd-sync [--check]
 
 Sync repo-managed user systemd units:
-  - dotfiles-auto-update.timer/service
+  - dotfiles-auto-update.timer/service when DOTFILES_AUTO_UPDATE_ENABLED=true
 
 Options:
   --check     Validate files only, do not modify
@@ -82,6 +82,17 @@ try_enable_linger() {
 systemctl_user_ok() {
   command -v systemctl >/dev/null 2>&1 || return 1
   systemctl --user show-environment >/dev/null 2>&1
+}
+
+auto_update_enabled() {
+  case "${DOTFILES_AUTO_UPDATE_ENABLED:-${ENABLE_DOTFILES_AUTO_UPDATE:-false}}" in
+    1|true|TRUE|yes|YES|on|ON)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
 }
 
 sync_unit_pair() {
@@ -185,14 +196,20 @@ main() {
 
   local status=0
 
-  # dotfiles auto-update timer/service (always).
-  sync_unit_pair \
-    "dotfiles-auto-update.timer" \
-    "$dotfiles_dir/systemd/user/dotfiles-auto-update.service" \
-    "$dotfiles_dir/systemd/user/dotfiles-auto-update.timer" \
-    "$user_dir/dotfiles-auto-update.service" \
-    "$user_dir/dotfiles-auto-update.timer" \
-    "__DOTFILES_DIR__=$dotfiles_dir" || status=1
+  if auto_update_enabled; then
+    sync_unit_pair \
+      "dotfiles-auto-update.timer" \
+      "$dotfiles_dir/systemd/user/dotfiles-auto-update.service" \
+      "$dotfiles_dir/systemd/user/dotfiles-auto-update.timer" \
+      "$user_dir/dotfiles-auto-update.service" \
+      "$user_dir/dotfiles-auto-update.timer" \
+      "__DOTFILES_DIR__=$dotfiles_dir" || status=1
+  else
+    remove_unit_pair \
+      "dotfiles-auto-update.service" \
+      "dotfiles-auto-update.timer" \
+      "$user_dir" || status=1
+  fi
 
   remove_unit_pair \
     "agentic-skill-updater.service" \

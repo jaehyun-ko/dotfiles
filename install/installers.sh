@@ -331,61 +331,6 @@ install_nvtop_from_source() {
     print_status "nvtop built and installed from source"
 }
 
-# Install Claude Code configuration (from submodule)
-install_claude_config() {
-    local claude_dir="$SCRIPT_DIR/../claude"
-    local claude_install="$claude_dir/install.sh"
-
-    if [ ! -f "$claude_install" ]; then
-        # Submodule not initialized - try to init
-        print_info "Initializing Claude config submodule..."
-
-        if [[ "$DRY_RUN" == "true" ]]; then
-            print_debug "[DRY RUN] Would initialize claude submodule"
-            return 0
-        fi
-
-        cd "$SCRIPT_DIR/.." || return 1
-        git submodule update --init claude 2>/dev/null || {
-            print_warning "Failed to initialize claude submodule"
-            print_info "You can manually clone: git clone git@github.com:jaehyun-ko/claude-dotfiles.git claude"
-            return 1
-        }
-    fi
-
-    if [ ! -f "$claude_install" ]; then
-        print_warning "Claude config not found at $claude_install"
-        return 1
-    fi
-
-    # Skip if already configured
-    if [[ "$FORCE_INSTALL" != "true" ]] \
-        && [ -L "$HOME/.claude/settings.json" ]; then
-        local current_target
-        current_target="$(readlink -f "$HOME/.claude/settings.json" 2>/dev/null)"
-        local expected_target
-        expected_target="$(readlink -f "$claude_dir/settings.json" 2>/dev/null)"
-        if [ "$current_target" = "$expected_target" ]; then
-            print_status "Claude Code configuration already installed (skipping)"
-            return 0
-        fi
-    fi
-
-    print_info "Installing Claude Code configuration..."
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would run claude/install.sh"
-        return 0
-    fi
-
-    DOTFILES_CLAUDE="$claude_dir" bash "$claude_install" || {
-        print_warning "Claude config installation had issues"
-        return 1
-    }
-
-    print_status "Claude Code configuration installed"
-}
-
 # Create symlinks for dotfiles
 create_symlinks() {
     print_info "Creating symlinks for dotfiles..."
@@ -454,6 +399,22 @@ create_symlinks() {
             print_status "Restored git user.email: $git_user_email"
         fi
     fi
+}
+
+install_dotfiles_helpers() {
+    print_info "Installing dotfiles helper launchers..."
+
+    if [[ "$DRY_RUN" == "true" ]]; then
+        print_debug "[DRY RUN] Would run bin/dotfiles-bin-sync"
+        return 0
+    fi
+
+    bash "$DOTFILES_DIR/bin/dotfiles-bin-sync" || {
+        print_warning "Failed to install dotfiles helper launchers"
+        return 1
+    }
+
+    print_status "Dotfiles helper launchers installed"
 }
 
 # Change default shell to zsh
@@ -593,103 +554,6 @@ EOF
     fi
 }
 
-is_claude_config_installed() {
-    if [ -L "$HOME/.claude/settings.json" ]; then
-        return 0
-    fi
-    return 1
-}
-
-is_opencode_config_installed() {
-    local src_dir="$DOTFILES_DIR/opencode"
-    local dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
-    local file
-    local files=("opencode.json" "oh-my-opencode.json")
-
-    for file in "${files[@]}"; do
-        local src="$src_dir/$file"
-        local dst="$dst_dir/$file"
-        if [ ! -f "$src" ]; then
-            return 1
-        fi
-        if [ ! -L "$dst" ] || [ "$(readlink "$dst" 2>/dev/null || true)" != "$src" ]; then
-            return 1
-        fi
-    done
-
-    return 0
-}
-
-install_opencode_config() {
-    local src_dir="$DOTFILES_DIR/opencode"
-    local dst_dir="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
-    local files=("opencode.json" "oh-my-opencode.json")
-    local file
-
-    if [ ! -d "$src_dir" ]; then
-        print_warning "OpenCode config source directory not found: $src_dir"
-        return 1
-    fi
-
-    if is_opencode_config_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "OpenCode configuration already installed (skipping)"
-        return 0
-    fi
-
-    print_info "Installing OpenCode configuration..."
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        for file in "${files[@]}"; do
-            print_debug "[DRY RUN] Would link $src_dir/$file -> $dst_dir/$file"
-        done
-        return 0
-    fi
-
-    mkdir -p "$dst_dir"
-
-    for file in "${files[@]}"; do
-        local src="$src_dir/$file"
-        local dst="$dst_dir/$file"
-
-        if [ ! -f "$src" ]; then
-            print_warning "OpenCode config file not found: $src"
-            continue
-        fi
-
-        if [ -f "$dst" ] && [ ! -L "$dst" ]; then
-            backup_file "$dst"
-        fi
-
-        if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
-            print_status "OpenCode config already linked: $dst"
-            continue
-        fi
-
-        rm -f "$dst"
-        ln -sf "$src" "$dst" || {
-            print_warning "Failed to link OpenCode config: $dst"
-            continue
-        }
-
-        print_status "Linked OpenCode config: $dst"
-    done
-
-    print_status "OpenCode configuration installed"
-}
-
-is_codex_sync_launcher_installed() {
-    local name="$1"
-    local src="$DOTFILES_DIR/bin/$name"
-    local dst="$HOME/.local/bin/$name"
-    if [ ! -x "$dst" ] || [ ! -f "$src" ]; then
-        return 1
-    fi
-    if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ]; then
-        return 0
-    fi
-    return 1
-}
-
 systemd_user_dir() {
     echo "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 }
@@ -798,53 +662,6 @@ install_user_timer() {
     print_status "Installed and enabled $unit_name"
 }
 
-is_codex_omo_sync_stack_ready() {
-    if ! is_native_opencode_cli_installed; then
-        return 1
-    fi
-    if ! command_exists_or_nvm codex || ! command_exists_or_nvm omx || ! command_exists_or_nvm oh-my-opencode; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "codex-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "omo-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "dotfiles-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "codex-config-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "omx-config-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "opencode-config-sync"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "codex-plan"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "codex-code"; then
-        return 1
-    fi
-    if ! is_codex_sync_launcher_installed "opencode"; then
-        return 1
-    fi
-    return 0
-}
-
-is_native_opencode_cli_installed() {
-    local candidate
-    for candidate in "$HOME"/.nvm/versions/node/*/bin/opencode; do
-        if [ -x "$candidate" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
 is_dotfiles_auto_update_timer_ready() {
     if ! command_exists systemctl; then
         return 1
@@ -859,151 +676,6 @@ is_dotfiles_auto_update_timer_ready() {
         "$user_dir/dotfiles-auto-update.service" \
         "$user_dir/dotfiles-auto-update.timer" \
         "__DOTFILES_DIR__=$DOTFILES_DIR"
-}
-
-run_npm_global_install() {
-    local package="$1"
-    if [ -s "$HOME/.nvm/nvm.sh" ]; then
-        retry_command "bash -lc 'export NVM_DIR=\"$HOME/.nvm\"; source \"$HOME/.nvm/nvm.sh\" && (nvm use node >/dev/null 2>&1 || (nvm install node && nvm use node && nvm alias default node)) && npm install -g \"$package\"'" "install $package via nvm"
-        return $?
-    fi
-
-    if command_exists npm; then
-        retry_command "npm install -g '$package'" "install $package"
-        return $?
-    fi
-
-    print_warning "npm not found; cannot install $package"
-    return 1
-}
-
-install_codex_cli() {
-    if command_exists codex && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Codex CLI is already installed"
-        return 0
-    fi
-
-    print_info "Installing Codex CLI (@openai/codex)..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would install @openai/codex"
-        return 0
-    fi
-
-    run_npm_global_install "@openai/codex" || {
-        print_warning "Failed to install Codex CLI"
-        return 1
-    }
-    print_status "Codex CLI installed"
-}
-
-install_oh_my_codex_cli() {
-    if command_exists_or_nvm omx && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "oh-my-codex (omx) is already installed"
-        return 0
-    fi
-
-    print_info "Installing oh-my-codex..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would install oh-my-codex"
-        return 0
-    fi
-
-    run_npm_global_install "oh-my-codex" || {
-        print_warning "Failed to install oh-my-codex"
-        return 1
-    }
-    print_status "oh-my-codex installed"
-}
-
-install_opencode_cli() {
-    if is_native_opencode_cli_installed && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "OpenCode CLI is already installed"
-        return 0
-    fi
-
-    print_info "Installing OpenCode CLI (opencode-ai)..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would install opencode-ai"
-        return 0
-    fi
-
-    run_npm_global_install "opencode-ai" || {
-        print_warning "Failed to install OpenCode CLI"
-        return 1
-    }
-    print_status "OpenCode CLI installed"
-}
-
-install_oh_my_opencode_cli() {
-    if command_exists oh-my-opencode && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "oh-my-opencode is already installed"
-        return 0
-    fi
-
-    print_info "Installing oh-my-opencode..."
-    if [[ "$DRY_RUN" == "true" ]]; then
-        print_debug "[DRY RUN] Would install oh-my-opencode"
-        return 0
-    fi
-
-    run_npm_global_install "oh-my-opencode" || {
-        print_warning "Failed to install oh-my-opencode"
-        return 1
-    }
-    print_status "oh-my-opencode installed"
-}
-
-install_codex_sync_launchers() {
-    print_info "Installing codex/omo sync launchers..."
-    local launchers=(
-        # Node CLIs (NVM-aware wrappers for non-interactive shells)
-        "codex"
-        "omx"
-        "oh-my-opencode"
-
-        # Repo launchers / sync tools
-        "codex-sync"
-        "omo-sync"
-        "dotfiles-sync"
-        "dotfiles-post-sync"
-        "dotfiles-bin-sync"
-        "dotfiles-systemd-sync"
-        "codex-config-sync"
-        "omx-config-sync"
-        "opencode-config-sync"
-        "codex-plan"
-        "codex-code"
-        "opencode"
-    )
-    local target_dir="$HOME/.local/bin"
-
-    if [[ "$DRY_RUN" == "true" ]]; then
-        for name in "${launchers[@]}"; do
-            print_debug "[DRY RUN] Would link $DOTFILES_DIR/bin/$name -> $target_dir/$name"
-        done
-        return 0
-    fi
-
-    mkdir -p "$target_dir"
-    local name
-    for name in "${launchers[@]}"; do
-        local src="$DOTFILES_DIR/bin/$name"
-        local dst="$target_dir/$name"
-        if [ ! -f "$src" ]; then
-            print_warning "Launcher not found: $src"
-            continue
-        fi
-        if [ -L "$dst" ] && [ "$(readlink "$dst" 2>/dev/null || true)" = "$src" ] && [ -x "$dst" ] && [[ "$FORCE_INSTALL" != "true" ]]; then
-            print_status "Launcher already installed: $dst"
-            continue
-        fi
-        chmod +x "$src" 2>/dev/null || true
-        ln -sf "$src" "$dst" || {
-            print_warning "Failed to create launcher link: $dst"
-            continue
-        }
-        print_status "Installed launcher: $dst"
-    done
 }
 
 install_dotfiles_auto_update_timer() {
@@ -1023,18 +695,4 @@ install_dotfiles_auto_update_timer() {
         "$user_dir/dotfiles-auto-update.service" \
         "$user_dir/dotfiles-auto-update.timer" \
         "__DOTFILES_DIR__=$DOTFILES_DIR"
-}
-
-install_codex_omo_sync_stack() {
-    if is_codex_omo_sync_stack_ready && [[ "$FORCE_INSTALL" != "true" ]]; then
-        print_status "Codex/OmO sync stack is already configured"
-        return 0
-    fi
-    print_info "Installing Codex/OmO sync stack..."
-    install_codex_cli || print_warning "Codex CLI install step had issues"
-    install_oh_my_codex_cli || print_warning "oh-my-codex install step had issues"
-    install_opencode_cli || print_warning "OpenCode CLI install step had issues"
-    install_oh_my_opencode_cli || print_warning "oh-my-opencode install step had issues"
-    install_codex_sync_launchers || print_warning "launcher installation had issues"
-    print_status "Codex/OmO sync stack setup completed"
 }

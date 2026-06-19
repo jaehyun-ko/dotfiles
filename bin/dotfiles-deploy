@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+show_help() {
+  cat <<'EOF_HELP'
+Usage: dotfiles-deploy [options]
+
+Push the current dotfiles commit, apply local post-sync, then fan out to servers.
+
+Options:
+  --repo PATH     Dotfiles repository path
+  --remote NAME   Git remote name (default: origin)
+  --branch NAME   Git branch (default: current branch, fallback: main)
+  --no-push       Skip git push
+  --dry-run       Print actions without applying remote sync
+  --help, -h      Show this help
+EOF_HELP
+}
+
+resolve_script_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -L "$source" ]; do
+    local dir
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    source="$(readlink "$source")"
+    if [[ "$source" != /* ]]; then
+      source="$dir/$source"
+    fi
+  done
+  cd -P "$(dirname "$source")" && pwd
+}
+
+script_dir="$(resolve_script_dir)"
+repo="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
+remote="${DOTFILES_AUTO_UPDATE_REMOTE:-origin}"
+branch="${DOTFILES_AUTO_UPDATE_BRANCH:-}"
+no_push="false"
+dry_run="false"
+
+while (($# > 0)); do
+  case "$1" in
+    --repo)
+      repo="$2"
+      shift 2
+      ;;
+    --remote)
+      remote="$2"
+      shift 2
+      ;;
+    --branch)
+      branch="$2"
+      shift 2
+      ;;
+    --no-push)
+      no_push="true"
+      shift
+      ;;
+    --dry-run)
+      dry_run="true"
+      shift
+      ;;
+    --help|-h)
+      show_help
+      exit 0
+      ;;
+    *)
+      echo "Unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+done
+
+config_env="${XDG_CONFIG_HOME:-$HOME/.config}/dotfiles-sync/config.env"
+if [[ -f "$config_env" ]]; then
+  # shellcheck disable=SC1090
+  source "$config_env"
+fi
+
+if [[ -z "$branch" ]]; then
+  branch="$(git -C "$repo" branch --show-current 2>/dev/null || true)"
+  branch="${branch:-main}"
+fi
+
+if [[ -n "$(git -C "$repo" status --porcelain)" ]]; then
+  echo "[error] worktree is dirty; commit or stash changes before deploy" >&2
+  git -C "$repo" status --short >&2
+  exit 1
+fi
+
+if [[ "$no_push" != "true" ]]; then
+  if [[ "$dry_run" == "true" ]]; then
+    echo "[dry-run] would run: git -C \"$repo\" push \"$remote\" \"HEAD:$branch\""
+  else
+    git -C "$repo" push "$remote" "HEAD:$branch"
+  fi
+fi
+
+if [[ "$dry_run" == "true" ]]; then
+  echo "[dry-run] would run: \"$repo/bin/dotfiles-post-sync\""
+else
+  "$repo/bin/dotfiles-post-sync"
+fi
+
+sync_args=(fanout --repo "$repo" --remote "$remote" --branch "$branch")
+if [[ "$dry_run" == "true" ]]; then
+  sync_args+=(--dry-run)
+fi
+
+"$repo/bin/dotfiles-sync" "${sync_args[@]}"

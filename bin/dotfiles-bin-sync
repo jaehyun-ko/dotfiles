@@ -49,18 +49,18 @@ dotfiles_dir="${DOTFILES_REPO:-$(cd "$script_dir/.." && pwd)}"
 target_dir="$HOME/.local/bin"
 
 launchers=(
-  # Node CLIs (NVM-aware wrappers)
-  codex
-  omx
-  oh-my-opencode
-
-  # Sync + helpers
   dotfiles-sync
+  dotfiles-deploy
   dotfiles-post-sync
   dotfiles-bin-sync
   dotfiles-systemd-sync
+)
 
-  # Codex / OMX / OpenCode glue
+retired_launchers=(
+  codex
+  omx
+  oh-my-opencode
+  opencode
   codex-sync
   omo-sync
   codex-config-sync
@@ -68,10 +68,26 @@ launchers=(
   opencode-config-sync
   codex-plan
   codex-code
-  opencode
 )
 
 status=0
+for name in "${retired_launchers[@]}"; do
+  src="$dotfiles_dir/bin/$name"
+  dst="$target_dir/$name"
+
+  if [[ -L "$dst" ]] && [[ "$(readlink "$dst" 2>/dev/null || true)" == "$src" ]]; then
+    if [[ "$mode" == "check" ]]; then
+      echo "[stale] $dst -> $src" >&2
+      status=1
+    else
+      rm -f "$dst" || {
+        echo "[error] failed to remove retired launcher: $dst" >&2
+        status=1
+      }
+    fi
+  fi
+done
+
 for name in "${launchers[@]}"; do
   src="$dotfiles_dir/bin/$name"
   dst="$target_dir/$name"
@@ -100,4 +116,3 @@ for name in "${launchers[@]}"; do
 done
 
 exit "$status"
-

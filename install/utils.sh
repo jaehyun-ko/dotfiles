@@ -72,22 +72,6 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Command checking with NVM fallback.
-command_exists_or_nvm() {
-    local cmd="$1"
-    if command_exists "$cmd"; then
-        return 0
-    fi
-
-    local candidate
-    for candidate in "$HOME"/.nvm/versions/node/*/bin/"$cmd"; do
-        if [ -x "$candidate" ]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
 # Retry mechanism
 retry_command() {
     local cmd="$1"

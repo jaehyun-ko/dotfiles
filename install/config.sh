@@ -83,8 +83,7 @@ export SKIP_MIRROR_CHANGE="${SKIP_MIRROR_CHANGE:-false}"  # Skip APT mirror conf
 export AUTO_MIRROR="${AUTO_MIRROR:-false}"  # Automatically select best mirror without prompting
 export FASTEST_MIRROR="${FASTEST_MIRROR:-false}"  # Test and use fastest mirror (takes time)
 export MIRROR_LOCATION="${MIRROR_LOCATION:-}"  # Force specific mirror location (kr, jp, cn, us)
-export SKIP_CODEX_SYNC_STACK="${SKIP_CODEX_SYNC_STACK:-false}"  # Skip codex/omo sync setup
-export SKIP_DOTFILES_AUTO_UPDATE="${SKIP_DOTFILES_AUTO_UPDATE:-false}"  # Skip dotfiles auto update timer
+export ENABLE_DOTFILES_AUTO_UPDATE="${ENABLE_DOTFILES_AUTO_UPDATE:-false}"  # Opt in to dotfiles auto update timer
 
 # Dotfiles sync defaults
 export DOTFILES_AUTO_UPDATE_REMOTE="${DOTFILES_AUTO_UPDATE_REMOTE:-origin}"

@@ -8,10 +8,11 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `bash`: oh-my-bash + shared aliases + lazy nvm loading
 - `tmux`: oh-my-tmux local configuration
 - `git`: template `.gitconfig` with practical defaults
-- `claude/`: Claude Code model-only setup (`settings.json`)
-- `opencode/`: OpenCode setup (`opencode.json`, `oh-my-opencode.json`)
-- `codex/`: Codex policy (`model-policy.env`)
 - `install/`: reusable installer modules and phase orchestration
+- `bin/`: dotfiles repository sync helpers
+- `systemd/`: optional user-level dotfiles auto-update timer
+
+This repo does not manage Claude, OpenCode/oh-my-opencode, Codex, or oh-my-codex settings. Install and configure those tools directly.
 
 ## Quick Start
 
@@ -30,7 +31,7 @@ Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 3. Shell environment setup
 4. Development tools installation
 5. System tools installation
-6. Final configuration (symlinks, optional Claude config, OpenCode config, Codex/OmO sync, dotfiles auto-update, default shell)
+6. Final configuration: symlinks, dotfiles helpers, dotfiles auto-update, default shell
 
 ## Managed Dotfiles
 
@@ -43,60 +44,46 @@ The installer symlinks these files to `$HOME`:
 - `aliases.sh`
 - `.gitconfig`
 
-## Codex/OmO Sync Stack
+## Dotfiles Helpers
 
-During install, it sets up:
+During install, the repo links these helpers into `~/.local/bin`:
 
-- NVM-aware CLI shims in `~/.local/bin/`: `codex`, `omx`, `oh-my-opencode`
-- Sync/launcher scripts in `~/.local/bin/`: `codex-sync`, `omo-sync`, `dotfiles-sync`, `dotfiles-post-sync`, `dotfiles-bin-sync`, `dotfiles-systemd-sync`, `codex-config-sync`, `omx-config-sync`, `opencode-config-sync`, `codex-plan`, `codex-code`, `opencode`
-- Codex CLI / oh-my-codex / OpenCode CLI / oh-my-opencode install attempts
-- Symlinked OpenCode config files from repo to `~/.config/opencode/`
-- Managed Codex policy sync into `~/.codex/config.toml`
+- `dotfiles-sync`
+- `dotfiles-deploy`
+- `dotfiles-post-sync`
+- `dotfiles-bin-sync`
+- `dotfiles-systemd-sync`
 
-Behavior:
-
-- Runs `codex-config-sync` before launching `codex` (applies model/feature policy keys and removes custom developer instructions)
-- Runs `omx-config-sync` during post-sync as a cleanup step for legacy prompt/agent/skill wiring
-- Runs `opencode-config-sync` before launching `oh-my-opencode` (preserves user-edited config files; use `--force` to relink)
-- Skips frequent checks when within interval (default 15 min)
-
-Codex policy (repo default):
-
-- Default/general/search: `gpt-5.5` + `model_reasoning_effort="xhigh"`
-- Planning (`codex-plan`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
-- Implementation/review (`codex-code`): `gpt-5.5` + `model_reasoning_effort="xhigh"`
-- Feature flag: `[features] goals = true`
-- Per-host override file: `overlays/<server_id>/codex/model-policy.env`
-
-Examples:
-
-```bash
-codex-plan "API rollout plan 초안 잡아줘"
-codex-code "이 리팩토링 구현하고 테스트까지 돌려줘"
-```
+`dotfiles-bin-sync` also removes stale repo-managed chatbot launcher symlinks if they still point at this checkout.
 
 ## Dotfiles Auto-Update
 
-During install, it also sets up:
+Auto-update timers are disabled by default. The preferred rollout path is push-based:
+
+```bash
+git commit -am "Update dotfiles"
+dotfiles-deploy
+```
+
+`dotfiles-deploy` pushes the current commit, runs local post-sync, then fans out to enabled servers from `sync/servers.tsv`.
+
+If explicitly enabled with `./install.sh --enable-dotfiles-autoupdate`, the installer sets up:
 
 - `dotfiles-auto-update.timer` (user systemd, every 15 minutes)
 - `dotfiles-auto-update.service` using `bin/dotfiles-sync`
 
 Behavior:
 
-- Uses `dotfiles-sync run` (subcommand CLI)
-- Legacy flag-only interface (`dotfiles-sync --servers ...`) is removed
-- Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`
-- Submodules are synced to the committed gitlinks after local sync
-- Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`
+- Timer mode uses `dotfiles-sync run`.
+- Local sync is enforced with `fetch + reset --hard + clean + pull --ff-only`.
+- Submodules are synced only when `.gitmodules` exists.
+- Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`.
 - Runs `dotfiles-post-sync` after sync:
-  - `dotfiles-bin-sync` (self-heal `~/.local/bin` launcher links)
-  - `opencode-config-sync --force`
-  - `codex-config-sync`
-  - `omx-config-sync` (legacy prompt/agent/skill cleanup)
-  - `dotfiles-systemd-sync` (keeps user timers up to date + enables linger best-effort)
-- If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`
-- Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails
+  - `dotfiles-bin-sync`
+  - legacy Claude/OpenCode config symlink cleanup, only when the symlink points at this checkout
+  - `dotfiles-systemd-sync`
+- If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`.
+- Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails.
 
 Environment variables:
 
@@ -106,10 +93,11 @@ Environment variables:
 - `DOTFILES_SYNC_SSH_USER`, `DOTFILES_SYNC_SSH_PORT`, `DOTFILES_SYNC_SSH_IDENTITY` (keep in local env file, not in git)
 - `DOTFILES_SERVER_ID` (optional; fallback: `hostname -s`)
 - `DOTFILES_SYNC_POST_CMD` (optional override; default: `"<repo>/bin/dotfiles-post-sync"`)
+- `DOTFILES_AUTO_UPDATE_ENABLED=true` (runtime opt-in for `dotfiles-systemd-sync`)
 
 Recommended setup for multi-server:
 
-1. Clone this repo on each server to the same path (for example `~/dotfiles`).
+1. Clone this repo on each server to the same path, for example `~/dotfiles`.
 2. Run `./install.sh -y` once per server.
 3. Configure `sync/servers.tsv` and `sync/overlay-allowlist.txt` in the repo.
 4. Set `DOTFILES_SYNC_CONTROLLER=true` on exactly one control node.
@@ -147,8 +135,7 @@ dotfiles-sync validate --repo ~/dotfiles
 dotfiles-sync local --repo ~/dotfiles
 dotfiles-sync fanout --repo ~/dotfiles
 dotfiles-sync run --repo ~/dotfiles
-codex-config-sync --check
-omx-config-sync --check
+dotfiles-deploy
 ```
 
 ## Post-Install
@@ -171,13 +158,11 @@ git config --global user.email "you@example.com"
 1. Edit shared aliases in `aliases.sh`.
 2. Edit package/tool URL lists in `install/config.sh`.
 3. Adjust shell plugins directly in `.zshrc` or `.bashrc`.
-4. Adjust Claude Code model selection in `claude/settings.json`.
+4. Configure chatbot tools in their own native config locations.
 
 ## Troubleshooting
 
 - Default shell: `chsh -s "$(which zsh)"`
 - Prompt font rendering: install a Nerd Font
 - Installer permissions: `chmod +x install.sh`
-- Skip Codex/OmO sync stack: `./install.sh --skip-codex-sync`
-- Skip dotfiles auto-update timer: `./install.sh --skip-dotfiles-autoupdate`
-- Chatbot auto-rollout guide: `CHATBOT_ROLLOUT.md`
+- Enable dotfiles auto-update timer: `./install.sh --enable-dotfiles-autoupdate`
