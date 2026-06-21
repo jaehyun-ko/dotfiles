@@ -1,0 +1,26 @@
+# Local/machine-specific files
+.credentials.json
+*.local.json
+*.secret
+*.key
+*.pem
+.env*
+history.jsonl
+stats-cache.json
+security_warnings_state_*.json
+settings.local.json
+
+# Cache directories
+cache/
+debug/
+file-history/
+logs/
+paste-cache/
+plans/
+session-env/
+shell-snapshots/
+statsig/
+telemetry/
+todos/
+backups/
+ide/

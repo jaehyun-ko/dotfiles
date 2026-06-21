@@ -57,6 +57,3 @@ target/
 
 # OMX runtime state (created during agent sessions)
 .omx/
-
-# Local copy retained after removing the Claude config submodule.
-claude/

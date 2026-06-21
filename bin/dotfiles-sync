@@ -34,7 +34,7 @@ Commands:
   run       Run local sync and, if controller, fan-out sync
   local     Run local sync only
   fanout    Run fan-out sync only
-  validate  Validate registry/inventory/allowlist configuration
+  validate  Validate registry and allowlist configuration
 
 Options:
   --repo PATH     Dotfiles repository path
@@ -91,11 +91,6 @@ get_server_id() {
     return 0
   fi
   hostname -s 2>/dev/null || hostname
-}
-
-get_inventory_file() {
-  local value="${DOTFILES_SYNC_INVENTORY:-$DOTFILES_REPO/sync/servers.tsv}"
-  expand_home_path "$value"
 }
 
 get_registry_dir() {
@@ -399,88 +394,6 @@ do_local_sync() {
   return 0
 }
 
-validate_inventory_file() {
-  local inventory="$1"
-  local header_expected=$'server_id\tssh_host\trepo_path\tssh_port\tpost_cmd\tenabled'
-  local line line_no=0
-  local seen_header=0
-  local tab_count
-  local server_id ssh_host repo_path ssh_port post_cmd enabled
-  declare -A seen_ids=()
-
-  if [[ ! -f "$inventory" ]]; then
-    echo "[error] inventory file not found: $inventory" >&2
-    return 1
-  fi
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_no=$((line_no + 1))
-    line="$(trim "$line")"
-    [[ -z "$line" ]] && continue
-
-    if [[ "$line" == \#* ]]; then
-      continue
-    fi
-
-    if [[ "$seen_header" == "0" ]]; then
-      if [[ "$line" != "$header_expected" ]]; then
-        echo "[error] invalid inventory header in $inventory:$line_no" >&2
-        echo "[error] expected: $header_expected" >&2
-        return 1
-      fi
-      seen_header=1
-      continue
-    fi
-
-    tab_count="$(printf '%s' "$line" | tr -cd '\t' | wc -c | tr -d ' ')"
-    if [[ "$tab_count" != "5" ]]; then
-      echo "[error] inventory row must have 6 TSV columns: $inventory:$line_no" >&2
-      return 1
-    fi
-
-    server_id="$(printf '%s' "$line" | cut -f1)"
-    ssh_host="$(printf '%s' "$line" | cut -f2)"
-    repo_path="$(printf '%s' "$line" | cut -f3)"
-    ssh_port="$(printf '%s' "$line" | cut -f4)"
-    post_cmd="$(printf '%s' "$line" | cut -f5)"
-    enabled="$(printf '%s' "$line" | cut -f6)"
-    server_id="$(trim "$server_id")"
-    ssh_host="$(trim "$ssh_host")"
-    repo_path="$(trim "$repo_path")"
-    ssh_port="$(trim "$ssh_port")"
-    enabled="$(trim "$enabled")"
-
-    if [[ -z "$server_id" ]]; then
-      echo "[error] server_id is required: $inventory:$line_no" >&2
-      return 1
-    fi
-    if [[ "$enabled" != "0" && "$enabled" != "1" ]]; then
-      echo "[error] enabled must be 0 or 1: $inventory:$line_no" >&2
-      return 1
-    fi
-    if [[ "$enabled" == "1" && -z "$ssh_host" ]]; then
-      echo "[error] ssh_host is required when enabled=1: $inventory:$line_no" >&2
-      return 1
-    fi
-    if [[ -n "$ssh_port" && ! "$ssh_port" =~ ^[0-9]+$ ]]; then
-      echo "[error] ssh_port must be numeric: $inventory:$line_no" >&2
-      return 1
-    fi
-    if [[ -n "${seen_ids[$server_id]:-}" ]]; then
-      echo "[error] duplicate server_id '$server_id' in inventory" >&2
-      return 1
-    fi
-    seen_ids[$server_id]=1
-  done < "$inventory"
-
-  if [[ "$seen_header" != "1" ]]; then
-    echo "[error] inventory header missing: $inventory" >&2
-    return 1
-  fi
-
-  return 0
-}
-
 registry_value() {
   local file="$1"
   local key="$2"
@@ -500,12 +413,6 @@ registry_value() {
     value="${value//\\\\/\\}"
   fi
   printf '%s' "$value"
-}
-
-registry_has_entries() {
-  local registry_dir
-  registry_dir="$(get_registry_dir)"
-  compgen -G "$registry_dir/*.env" >/dev/null 2>&1
 }
 
 validate_registry_file() {
@@ -701,11 +608,7 @@ sync_remote_with_retry() {
 }
 
 do_fanout_sync() {
-  if registry_has_entries; then
-    do_fanout_registry_sync
-  else
-    do_fanout_inventory_sync
-  fi
+  do_fanout_registry_sync
 }
 
 do_fanout_registry_sync() {
@@ -760,85 +663,6 @@ do_fanout_registry_sync() {
   return "$rc"
 }
 
-do_fanout_inventory_sync() {
-  local inventory server_id_local clone_url
-  local line line_no=0 seen_header=0
-  local tab_count server_id ssh_host repo_path ssh_port post_cmd enabled
-  local rc=0
-  local -a pids=()
-  local -a labels=()
-
-  inventory="$(get_inventory_file)"
-  if ! validate_inventory_file "$inventory"; then
-    return 1
-  fi
-
-  server_id_local="$(get_server_id)"
-  clone_url="$(resolve_clone_url "$DOTFILES_REPO")"
-  if [[ -z "$clone_url" ]]; then
-    echo "[error] cannot determine clone URL for fan-out" >&2
-    return 1
-  fi
-
-  while IFS= read -r line || [[ -n "$line" ]]; do
-    line_no=$((line_no + 1))
-    line="$(trim "$line")"
-    [[ -z "$line" ]] && continue
-    [[ "$line" == \#* ]] && continue
-
-    if [[ "$seen_header" == "0" ]]; then
-      seen_header=1
-      continue
-    fi
-
-    tab_count="$(printf '%s' "$line" | tr -cd '\t' | wc -c | tr -d ' ')"
-    if [[ "$tab_count" != "5" ]]; then
-      echo "[error] invalid inventory row: $inventory:$line_no" >&2
-      rc=1
-      continue
-    fi
-
-    server_id="$(printf '%s' "$line" | cut -f1)"
-    ssh_host="$(printf '%s' "$line" | cut -f2)"
-    repo_path="$(printf '%s' "$line" | cut -f3)"
-    ssh_port="$(printf '%s' "$line" | cut -f4)"
-    post_cmd="$(printf '%s' "$line" | cut -f5)"
-    enabled="$(printf '%s' "$line" | cut -f6)"
-    server_id="$(trim "$server_id")"
-    ssh_host="$(trim "$ssh_host")"
-    repo_path="$(trim "$repo_path")"
-    ssh_port="$(trim "$ssh_port")"
-    post_cmd="$(trim "$post_cmd")"
-    enabled="$(trim "$enabled")"
-
-    [[ "$enabled" == "1" ]] || continue
-
-    if [[ "$server_id" == "$server_id_local" ]]; then
-      echo "[skip] skipping self target: $server_id"
-      continue
-    fi
-
-    if [[ -z "$repo_path" ]]; then
-      repo_path="$DOTFILES_REPO"
-    fi
-
-    (
-      sync_remote_with_retry "$server_id" "$ssh_host" "$repo_path" "$ssh_port" "$post_cmd" "$clone_url"
-    ) &
-    pids+=("$!")
-    labels+=("$server_id")
-  done < "$inventory"
-
-  for i in "${!pids[@]}"; do
-    if ! wait "${pids[$i]}"; then
-      echo "[error] fan-out target failed: ${labels[$i]}" >&2
-      rc=1
-    fi
-  done
-
-  return "$rc"
-}
-
 run_with_lock() {
   local lock_file="${DOTFILES_SYNC_LOCK_FILE:-$DEFAULT_LOCK_FILE}"
   lock_file="$(expand_home_path "$lock_file")"
@@ -860,14 +684,10 @@ run_with_lock() {
 }
 
 do_validate() {
-  local inventory allowlist
-  inventory="$(get_inventory_file)"
+  local allowlist
   allowlist="$(get_allowlist_file)"
 
   validate_registry_dir
-  if [[ -f "$inventory" ]]; then
-    validate_inventory_file "$inventory"
-  fi
   validate_allowlist_file "$allowlist"
   echo "[ok] validation passed"
 }

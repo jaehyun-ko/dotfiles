@@ -8,11 +8,10 @@ Personal shell/dev environment dotfiles with a modular 6-phase installer.
 - `bash`: oh-my-bash + shared aliases + lazy nvm loading
 - `tmux`: oh-my-tmux local configuration
 - `git`: template `.gitconfig` with practical defaults
+- `claude/`: Claude Code settings and output styles
 - `install/`: reusable installer modules and phase orchestration
 - `bin/`: dotfiles repository sync helpers
 - `systemd/`: optional user-level dotfiles auto-update timer
-
-This repo does not manage Claude, OpenCode/oh-my-opencode, Codex, or oh-my-codex settings. Install and configure those tools directly.
 
 ## Quick Start
 
@@ -31,7 +30,7 @@ Supported OS detection: Ubuntu/Debian, RedHat/CentOS/Fedora, Arch, macOS.
 3. Shell environment setup
 4. Development tools installation
 5. System tools installation
-6. Final configuration: symlinks, dotfiles helpers, dotfiles auto-update, default shell
+6. Final configuration: symlinks, helpers, Claude config, auto-update, default shell
 
 ## Managed Dotfiles
 
@@ -58,23 +57,31 @@ During install, the repo links these helpers into `~/.local/bin`:
 
 `dotfiles-bin-sync` also removes stale repo-managed chatbot launcher symlinks if they still point at this checkout.
 
-## Chatbot CLIs
+## Chatbot Tools
 
-The repo installs only native CLI binaries, not their settings:
+The repo installs native CLI binaries:
 
 - `claude` from `@anthropic-ai/claude-code`
 - `codex` from `@openai/codex`
 - `opencode` from `opencode-ai`
 
-This runs during `install.sh` and `dotfiles-post-sync`. Disable it with:
+It also installs repo-managed Claude Code settings from `claude/`.
+
+Disable CLI installation with:
 
 ```bash
 export DOTFILES_INSTALL_CHATBOT_CLIS=false
 ```
 
+Disable Claude settings installation with:
+
+```bash
+export DOTFILES_INSTALL_CLAUDE_CONFIG=false
+```
+
 ## Server Registry
 
-Servers self-register during `install.sh` by writing `sync/registry/<server_id>.env` and pushing it to `origin/main`. `dotfiles-deploy` reads this registry for fan-out. This replaces manual TSV editing for normal use.
+Servers self-register during `install.sh` by writing `sync/registry/<server_id>.env` and pushing it to `origin/main`. `dotfiles-deploy` reads this registry for fan-out.
 
 Set these on a server before `install.sh` if auto-detection is not enough:
 
@@ -101,7 +108,7 @@ git commit -am "Update dotfiles"
 dotfiles-deploy
 ```
 
-`dotfiles-deploy` pushes the current commit, runs local post-sync, then fans out to enabled servers from `sync/registry/`. If the registry is empty, `sync/servers.tsv` is still supported as a legacy fallback.
+`dotfiles-deploy` pushes the current commit, runs local post-sync, then fans out to enabled servers from `sync/registry/`.
 
 If explicitly enabled with `./install.sh --enable-dotfiles-autoupdate`, the installer sets up:
 
@@ -116,9 +123,10 @@ Behavior:
 - Server-specific overlays are applied from `overlays/<server_id>/...` using `rsync --delete`.
 - Runs `dotfiles-post-sync` after sync:
   - `dotfiles-bin-sync`
-  - legacy Claude/OpenCode config symlink cleanup, only when the symlink points at this checkout
+  - `dotfiles-chatbot-install`
+  - `claude/install.sh`
   - `dotfiles-systemd-sync`
-- If `DOTFILES_SYNC_CONTROLLER=true`, it also fan-outs to other servers from `sync/servers.tsv`.
+- If `DOTFILES_SYNC_CONTROLLER=true`, it also fans out to servers from `sync/registry/`.
 - Fan-out retries failed targets (`DOTFILES_SYNC_RETRY_MAX`, default `3`) and returns non-zero if any target fails.
 
 Environment variables:
@@ -130,6 +138,8 @@ Environment variables:
 - `DOTFILES_SERVER_ID` (optional; fallback: `hostname -s`)
 - `DOTFILES_SYNC_POST_CMD` (optional override; default: `"<repo>/bin/dotfiles-post-sync"`)
 - `DOTFILES_AUTO_UPDATE_ENABLED=true` (runtime opt-in for `dotfiles-systemd-sync`)
+- `DOTFILES_INSTALL_CHATBOT_CLIS=false` (skip chatbot CLI install)
+- `DOTFILES_INSTALL_CLAUDE_CONFIG=false` (skip Claude settings install)
 
 Recommended setup for multi-server:
 
@@ -154,14 +164,6 @@ Optional local-only secrets (`~/.config/dotfiles-sync/config.env`):
 DOTFILES_SYNC_SSH_USER=ubuntu
 DOTFILES_SYNC_SSH_IDENTITY=~/.ssh/id_ed25519
 DOTFILES_SYNC_SSH_PORT=22
-```
-
-Legacy inventory format (`sync/servers.tsv`):
-
-```tsv
-server_id	ssh_host	repo_path	ssh_port	post_cmd	enabled
-gpu-1	gpu-1.example.com	~/dotfiles	22		1
-gpu-2	gpu-2.example.com	~/dotfiles	22		1
 ```
 
 Manual commands:
@@ -194,7 +196,7 @@ git config --global user.email "you@example.com"
 1. Edit shared aliases in `aliases.sh`.
 2. Edit package/tool URL lists in `install/config.sh`.
 3. Adjust shell plugins directly in `.zshrc` or `.bashrc`.
-4. Configure chatbot tools in their own native config locations.
+4. Edit Claude Code settings in `claude/`.
 
 ## Troubleshooting
 

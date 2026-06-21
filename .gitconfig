@@ -26,7 +26,7 @@
     autoSetupRemote = true
 
 [merge]
-    conflictStyle = zdiff3
+    conflictStyle = diff3
 
 [rerere]
     enabled = true

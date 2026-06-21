@@ -1,2 +1,2 @@
 # Relative paths under $HOME that may be synchronized via overlays/<server_id>/.
-# Keep empty by default; chatbot tool configs are intentionally unmanaged.
+# Keep empty by default; shared tool configs are installed by post-sync scripts.
